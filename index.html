@@ -38,7 +38,6 @@
                 users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
                 dollar: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
                 syringe: <><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-.7.7-1.6 1.2-2.6 1.5l-4.1.9.9-4.1c.3-1 1.2-1.9 1.5-2.6L14.7 4.7"/><path d="m18 5 3 3"/><path d="m14 10 4 4"/></>,
-                trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><path d="M17 6h6v6"/></>,
                 refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></>,
                 shopping: <><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></>,
                 x: <path d="M18 6 6 18M6 6l12 12"/>,
@@ -139,6 +138,7 @@
                                 lastDateObj: serviceDate,
                                 totalPaid: 0,
                                 mounjaroInjections: 0,
+                                mounjaroPaid: 0,
                                 mounjaroDates: [],
                                 totalQty: 0,
                                 count: 0,
@@ -148,6 +148,7 @@
 
                         if (isMounjaroTarget) {
                             grouped[hn].hasMounjaro = true;
+                            grouped[hn].mounjaroPaid += paid;
                             if (lowerItem.includes('[ตัดคอร์ส]')) {
                                 grouped[hn].mounjaroInjections += qty;
                                 grouped[hn].mounjaroDates.push({
@@ -206,17 +207,12 @@
                     return { ...item, customerStatus: status };
                 });
 
-                // Dynamic Sorting logic
                 result.sort((a, b) => {
                     let valA = a[sortConfig.key];
                     let valB = b[sortConfig.key];
-
                     if (typeof valA === 'string' && sortConfig.key === 'name') {
-                        return sortConfig.direction === 'asc' 
-                            ? valA.localeCompare(valB, 'th') 
-                            : valB.localeCompare(valA, 'th');
+                        return sortConfig.direction === 'asc' ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
                     }
-
                     if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
                     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
                     return 0;
@@ -229,13 +225,14 @@
                 return filteredData.reduce((acc, curr) => {
                     acc.revenue += curr.totalPaid;
                     acc.mounjaroInjections += curr.mounjaroInjections;
+                    acc.mounjaroRevenue += curr.mounjaroPaid;
                     if (curr.customerStatus === 'ใหม่') acc.newCount += 1;
                     else acc.oldCount += 1;
                     if (curr.totalPaid > 0) acc.buyingCustomers += 1;
                     if (curr.mounjaroInjections > 0) acc.injectionCustomers += 1;
                     if (curr.hasMounjaro) acc.mounjaroUniqueCustomers += 1;
                     return acc;
-                }, { revenue: 0, mounjaroInjections: 0, newCount: 0, oldCount: 0, buyingCustomers: 0, injectionCustomers: 0, mounjaroUniqueCustomers: 0 });
+                }, { revenue: 0, mounjaroInjections: 0, mounjaroRevenue: 0, newCount: 0, oldCount: 0, buyingCustomers: 0, injectionCustomers: 0, mounjaroUniqueCustomers: 0 });
             }, [filteredData]);
 
             const handleReset = () => {
@@ -249,9 +246,7 @@
 
             const getSortIcon = (key) => {
                 if (sortConfig.key !== key) return <Icon name="arrowUpDown" size={12} className="text-slate-300 ml-1 opacity-50" />;
-                return sortConfig.direction === 'asc' 
-                    ? <Icon name="arrowUp" size={12} className="text-blue-600 ml-1" /> 
-                    : <Icon name="arrowDown" size={12} className="text-blue-600 ml-1" />;
+                return sortConfig.direction === 'asc' ? <Icon name="arrowUp" size={12} className="text-blue-600 ml-1" /> : <Icon name="arrowDown" size={12} className="text-blue-600 ml-1" />;
             };
 
             const handleExport = () => {
@@ -260,12 +255,12 @@
                     "ลำดับ": index + 1,
                     "HN": item.hn,
                     "ชื่อ-สกุล": item.name,
-                    "สถานะ": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
-                    "วันลงทะเบียน": item.registrationDate.toLocaleDateString('th-TH'),
+                    "ประเภทลูกค้า": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
                     "จำนวนฉีด Mounjaro": item.mounjaroInjections,
+                    "ยอดซื้อเฉพาะ Mounjaro": item.mounjaroPaid,
+                    "บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH'),
                     "ประวัติวันที่ฉีด": item.mounjaroDates.map(d => `${d.dateStr} (${d.qty})`).join(', '),
-                    "ยอดซื้อรวม": item.totalPaid,
-                    "บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH')
+                    "ยอดซื้อรวมทั้งหมด": item.totalPaid
                 }));
                 const ws = XLSX.utils.json_to_sheet(exportRows);
                 const wb = XLSX.utils.book_new();
@@ -307,8 +302,14 @@
                             </div>
                             <div className="bg-white p-6 rounded-[2rem] border border-blue-200 shadow-md bg-gradient-to-br from-white to-blue-50/30 flex items-center gap-5">
                                 <div className="p-4 bg-blue-600 text-white rounded-3xl"><Icon name="syringe" size={32} /></div>
-                                <div>
-                                    <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block">จำนวนฉีด Mounjaro ทั้งหมด</span>
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block">ฉีด Mounjaro ทั้งหมด</span>
+                                        <div className="text-right">
+                                            <span className="text-[10px] font-black uppercase text-emerald-600 block">ยอดขาย Mounjaro</span>
+                                            <span className="text-sm font-black text-emerald-600 tracking-tighter">฿{stats.mounjaroRevenue.toLocaleString()}</span>
+                                        </div>
+                                    </div>
                                     <h3 className="text-3xl font-black text-blue-600">{stats.mounjaroInjections.toLocaleString()} <span className="text-sm font-bold">ครั้ง</span></h3>
                                 </div>
                             </div>
@@ -342,7 +343,7 @@
                                     <span className="text-[9px] font-black uppercase text-purple-500">ที่ฉีดจริง</span>
                                     <Icon name="syringe" size={14} className="text-purple-300" />
                                 </div>
-                                <h4 className="text-lg font-black text-slate-900">{stats.injectionCustomers} <span className="text-[9px] font-bold text-slate-400 uppercase">HN</span></h4>
+                                <h4 className="text-lg font-black text-slate-900">{stats.injectionCustomers} <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">HN</span></h4>
                             </div>
                             <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm border-t-4 border-t-blue-400">
                                 <div className="flex justify-between items-start mb-2">
@@ -363,16 +364,19 @@
                         {/* Filters */}
                         <div className="bg-white rounded-[2rem] border border-slate-200 p-6 mb-8 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-sm">
                             <div className="relative">
+                                <Icon name="calendar" className="absolute left-4 top-3.5 text-slate-400" size={16} />
+                                <input type="date" className="w-full bg-slate-50 px-12 py-3 rounded-xl outline-none text-sm font-bold border-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-blue-600 uppercase tracking-tighter leading-none">บริการล่าสุดเริ่มจาก</span>
+                            </div>
+                            <div className="relative">
+                                <Icon name="calendar" className="absolute left-4 top-3.5 text-slate-400" size={16} />
+                                <input type="date" className="w-full bg-slate-50 px-12 py-3 rounded-xl outline-none text-sm font-bold border-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-blue-600 uppercase tracking-tighter leading-none">ถึงวันที่</span>
+                            </div>
+                            <div className="relative">
                                 <Icon name="search" className="absolute left-4 top-3.5 text-slate-400" size={18} />
                                 <input type="text" placeholder="ค้นชื่อ หรือ HN..." className="w-full bg-slate-50 pl-12 pr-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                            </div>
-                            <div className="relative">
-                                <input type="date" className="w-full bg-slate-50 px-4 py-3 rounded-xl outline-none text-sm font-bold border-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่เริ่ม</span>
-                            </div>
-                            <div className="relative">
-                                <input type="date" className="w-full bg-slate-50 px-4 py-3 rounded-xl outline-none text-sm font-bold border-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่สิ้นสุด</span>
+                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none">ค้นหาข้อมูล</span>
                             </div>
                         </div>
 
@@ -399,10 +403,10 @@
                                             <th className="px-8 py-5 text-center sort-header" onClick={() => handleSort('mounjaroInjections')}>
                                                 <div className="flex items-center justify-center">ฉีด Mounjaro {getSortIcon('mounjaroInjections')}</div>
                                             </th>
-                                            <th className="px-8 py-5">รายการสินค้าอื่น</th>
-                                            <th className="px-8 py-5 text-center sort-header" onClick={() => handleSort('registrationDate')}>
-                                                <div className="flex items-center justify-center">ลงทะเบียน {getSortIcon('registrationDate')}</div>
+                                            <th className="px-8 py-5 text-center sort-header" onClick={() => handleSort('lastDateObj')}>
+                                                <div className="flex items-center justify-center text-blue-600 font-black">บริการล่าสุด {getSortIcon('lastDateObj')}</div>
                                             </th>
+                                            <th className="px-8 py-5">รายการสินค้าอื่น</th>
                                             <th className="px-8 py-5 text-right sort-header" onClick={() => handleSort('totalPaid')}>
                                                 <div className="flex items-center justify-end">ยอดซื้อรวม {getSortIcon('totalPaid')}</div>
                                             </th>
@@ -440,6 +444,12 @@
                                                         )}
                                                     </div>
                                                 </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <div className="bg-blue-50/50 p-2 rounded-xl border border-blue-100/50 inline-block min-w-[100px]">
+                                                        <p className="text-sm font-black text-blue-700">{row.lastDateObj.toLocaleDateString('th-TH')}</p>
+                                                        <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter italic leading-none mt-1">LATEST SERVICE</p>
+                                                    </div>
+                                                </td>
                                                 <td className="px-8 py-6">
                                                     <div className="flex flex-wrap gap-1 max-w-[180px]">
                                                         {row.items.map((it, idx) => (
@@ -450,12 +460,6 @@
                                                             </span>
                                                         ))}
                                                     </div>
-                                                </td>
-                                                <td className="px-8 py-6 text-center">
-                                                    <p className="text-sm font-bold text-slate-600">{row.registrationDate.toLocaleDateString('th-TH')}</p>
-                                                    <p className="text-[10px] text-slate-400 italic font-bold uppercase tracking-tighter mt-1">
-                                                        ล่าสุด: {row.lastDateObj.toLocaleDateString('th-TH')}
-                                                    </p>
                                                 </td>
                                                 <td className="px-8 py-6 text-right">
                                                     <p className="text-xl font-black text-slate-900 tracking-tighter leading-none">{row.totalPaid.toLocaleString()}</p>
