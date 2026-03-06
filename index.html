@@ -37,6 +37,7 @@
                 dollar: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
                 syringe: <><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-.7.7-1.6 1.2-2.6 1.5l-4.1.9.9-4.1c.3-1 1.2-1.9 1.5-2.6L14.7 4.7"/><path d="m18 5 3 3"/><path d="m14 10 4 4"/></>,
                 trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><path d="M17 6h6v6"/></>,
+                refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></>,
                 x: <path d="M18 6 6 18M6 6l12 12"/>
             };
             return (
@@ -87,6 +88,8 @@
                     }
                 };
                 reader.readAsBinaryString(file);
+                // Clear input value so same file can be uploaded again
+                event.target.value = '';
             };
 
             const processRawData = (rows) => {
@@ -206,6 +209,16 @@
                 }, { revenue: 0, mounjaroInjections: 0, newCount: 0, oldCount: 0 });
             }, [filteredData]);
 
+            // ฟังก์ชันรีเซ็ตข้อมูลทั้งหมด
+            const handleReset = () => {
+                setData([]);
+                setSearchTerm('');
+                setStartDate('');
+                setEndDate('');
+                setSortOrder('date_desc');
+                setError(null);
+            };
+
             const handleExport = () => {
                 if (filteredData.length === 0) return;
                 const exportRows = filteredData.map((item, index) => ({
@@ -234,7 +247,15 @@
                                 <h1 className="text-4xl font-black text-slate-900 tracking-tight">Injection <span className="text-blue-600">History</span></h1>
                                 <p className="text-slate-500 mt-2 font-medium italic underline decoration-blue-200 decoration-2">แสดงประวัติการฉีด Mounjaro [ตัดคอร์ส] รายวัน</p>
                             </div>
-                            <div className="flex gap-3">
+                            <div className="flex flex-wrap justify-end gap-3">
+                                <button 
+                                    onClick={handleReset}
+                                    className="flex items-center gap-2 bg-white border border-rose-100 text-rose-500 px-6 py-3 rounded-2xl shadow-sm font-bold hover:bg-rose-50 transition-all"
+                                    title="ล้างข้อมูลและเริ่มใหม่"
+                                >
+                                    <Icon name="refresh" size={18} />
+                                    รีเฟรชข้อมูล
+                                </button>
                                 <button onClick={handleExport} disabled={filteredData.length === 0} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-lg shadow-emerald-200 font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all">
                                     <Icon name="download" /> Export History
                                 </button>
