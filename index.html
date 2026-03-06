@@ -33,8 +33,11 @@
                 calendar: <><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>,
                 filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
                 user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+                users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
                 clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
                 activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+                dollar: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
+                plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
                 x: <path d="M18 6 6 18M6 6l12 12"/>
             };
             return (
@@ -180,6 +183,18 @@
                 return result;
             }, [data, searchTerm, startDate, endDate, sortOrder]);
 
+            // คำนวณยอดรวมต่างๆ
+            const stats = useMemo(() => {
+                const totals = filteredData.reduce((acc, curr) => {
+                    acc.revenue += curr.totalPaid;
+                    if (curr.customerStatus === 'ใหม่') acc.newCustomers += 1;
+                    else acc.oldCustomers += 1;
+                    return acc;
+                }, { revenue: 0, newCustomers: 0, oldCustomers: 0 });
+                
+                return totals;
+            }, [filteredData]);
+
             const handleExport = () => {
                 if (filteredData.length === 0) return;
                 const exportRows = filteredData.map((item, index) => ({
@@ -225,6 +240,62 @@
                             </div>
                         </header>
 
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-4">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ยอดขายรวม</span>
+                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                                        <Icon name="dollar" size={18} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900">{stats.revenue.toLocaleString()}</h3>
+                                    <p className="text-xs text-slate-400 mt-1 font-bold">บาท (ตามตัวกรอง)</p>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-4">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ลูกค้าทั้งหมด</span>
+                                    <div className="p-2 bg-slate-50 text-slate-600 rounded-xl">
+                                        <Icon name="users" size={18} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900">{filteredData.length}</h3>
+                                    <p className="text-xs text-slate-400 mt-1 font-bold">ราย</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between border-b-4 border-b-emerald-400">
+                                <div className="flex items-center justify-between mb-4">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ลูกค้าใหม่</span>
+                                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                                        <Icon name="plus" size={18} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900">{stats.newCustomers}</h3>
+                                    <p className="text-xs text-emerald-600 mt-1 font-bold">ราย (ลงทะเบียนในรอบนี้)</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-4">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ลูกค้าเก่า</span>
+                                    <div className="p-2 bg-slate-50 text-slate-400 rounded-xl">
+                                        <Icon name="user" size={18} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-slate-900">{stats.oldCustomers}</h3>
+                                    <p className="text-xs text-slate-400 mt-1 font-bold">ราย (ซื้อซ้ำ)</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Filters */}
                         <div className="bg-white rounded-[2rem] border border-slate-200 p-6 mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-sm">
                             <div className="relative">
                                 <Icon name="search" className="absolute left-3 top-3.5 text-slate-400" size={18} />
