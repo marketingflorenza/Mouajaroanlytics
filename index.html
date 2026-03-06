@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mounjaro Peptide Analytics - New/Old Customer System</title>
+    <!-- Dependencies -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Sarabun', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useRef, useEffect } = React;
+
+        // Simple Icon Components (SVG) - Fixed with Fragments
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7-5-5-5 5m5-5v12"/>,
+                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m-7-11v12m-4-4 4 4 4-4"/>,
+                search: <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
+                calendar: <><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>,
+                filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
+                user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+                clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+                activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+                x: <path d="M18 6 6 18M6 6l12 12"/>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name]}
+                </svg>
+            );
+        };
+
+        const App = () => {
+            const [data, setData] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
+            const [sortOrder, setSortOrder] = useState('date_desc');
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [error, setError] = useState(null);
+            const fileInputRef = useRef(null);
+
+            const keywords = ['peptide', 'เปปไทด์', 'mounjaro', 'มอนจาโร', 'slimnow', 'สลิมนาว', 'คุมหิว', 'ปากกา', 'ลดน้ำหนัก'];
+
+            const parseDate = (dateStr) => {
+                if (!dateStr) return new Date(0);
+                if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
+                const parts = String(dateStr).split('/');
+                if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
+                const isoDate = new Date(dateStr);
+                return isNaN(isoDate.getTime()) ? new Date(0) : isoDate;
+            };
+
+            const handleFileUpload = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                setIsProcessing(true);
+                setError(null);
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const bstr = e.target.result;
+                        const workbook = XLSX.read(bstr, { type: 'binary' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                        processRawData(rows);
+                    } catch (err) {
+                        setError("ไม่สามารถประมวลผลไฟล์ได้ กรุณาตรวจสอบรูปแบบไฟล์ Excel");
+                        setIsProcessing(false);
+                    }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            const processRawData = (rows) => {
+                if (rows.length < 2) { setError("ไม่พบข้อมูลในไฟล์"); setIsProcessing(false); return; }
+                const headers = rows[0].map(h => String(h).trim());
+                const findIdx = (names) => headers.findIndex(h => names.some(n => h.includes(n)));
+
+                const idx = {
+                    hn: findIdx(['HN', 'รหัสคนไข้']),
+                    name: findIdx(['ชื่อ-สกุล', 'ชื่อ', 'Name']),
+                    group: findIdx(['กลุ่มลูกค้า', 'กลุ่ม']),
+                    phone: findIdx(['เบอร์โทร', 'โทรศัพท์', 'Phone']),
+                    item: findIdx(['รายการ', 'ชื่อสินค้า', 'Product']),
+                    date: findIdx(['วันที่ขาย', 'วันที่บริการ', 'Date']),
+                    regDate: findIdx(['วันลงทะเบียน', 'วันที่ลงทะเบียน', 'Registration Date', 'Reg Date']),
+                    paid: findIdx(['ยอดชำระ', 'ยอดเงิน', 'Paid'])
+                };
+
+                if (idx.hn === -1 || idx.name === -1) {
+                    setError("ไม่พบคอลัมน์ HN หรือ ชื่อ-สกุล กรุณาตรวจสอบหัวตาราง");
+                    setIsProcessing(false);
+                    return;
+                }
+
+                const grouped = {};
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (!row || !row[idx.hn]) continue;
+
+                    const itemName = String(row[idx.item] || "");
+                    if (keywords.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) {
+                        const hn = String(row[idx.hn]).trim();
+                        const paid = parseFloat(String(row[idx.paid] || "0").replace(/,/g, '')) || 0;
+                        const serviceDate = parseDate(row[idx.date]);
+                        const regDate = parseDate(row[idx.regDate]);
+
+                        if (!grouped[hn]) {
+                            grouped[hn] = {
+                                hn,
+                                name: String(row[idx.name] || "-"),
+                                group: String(row[idx.group] || "-"),
+                                phone: String(row[idx.phone] || "-"),
+                                items: [],
+                                registrationDate: regDate,
+                                lastDateObj: serviceDate,
+                                totalPaid: 0,
+                                count: 0
+                            };
+                        }
+                        if (!grouped[hn].items.includes(itemName)) grouped[hn].items.push(itemName);
+                        grouped[hn].totalPaid += paid;
+                        grouped[hn].count += 1;
+                        if (serviceDate > grouped[hn].lastDateObj) grouped[hn].lastDateObj = serviceDate;
+                    }
+                }
+                setData(Object.values(grouped));
+                setIsProcessing(false);
+            };
+
+            const filteredData = useMemo(() => {
+                const start = startDate ? new Date(startDate) : null;
+                const end = endDate ? new Date(endDate) : null;
+                if (start) start.setHours(0,0,0,0);
+                if (end) end.setHours(23,59,59,999);
+
+                let result = data.filter(item => {
+                    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.hn.includes(searchTerm);
+                    let matchesDate = true;
+                    if (start) matchesDate = matchesDate && item.lastDateObj >= start;
+                    if (end) matchesDate = matchesDate && item.lastDateObj <= end;
+                    return matchesSearch && matchesDate;
+                });
+
+                // ตรวจสอบสถานะลูกค้าใหม่/เก่า
+                result = result.map(item => {
+                    let status = "เก่า";
+                    if (start && end) {
+                        if (item.registrationDate >= start && item.registrationDate <= end) {
+                            status = "ใหม่";
+                        }
+                    } else if (start) {
+                        if (item.registrationDate >= start) status = "ใหม่";
+                    }
+                    return { ...item, customerStatus: status };
+                });
+
+                if (sortOrder === 'name_asc') result.sort((a,b) => a.name.localeCompare(b.name, 'th'));
+                if (sortOrder === 'name_desc') result.sort((a,b) => b.name.localeCompare(a.name, 'th'));
+                if (sortOrder === 'date_desc') result.sort((a,b) => b.lastDateObj - a.lastDateObj);
+                if (sortOrder === 'date_asc') result.sort((a,b) => a.lastDateObj - b.lastDateObj);
+                if (sortOrder === 'revenue_desc') result.sort((a,b) => b.totalPaid - a.totalPaid);
+
+                return result;
+            }, [data, searchTerm, startDate, endDate, sortOrder]);
+
+            const handleExport = () => {
+                if (filteredData.length === 0) return;
+                const exportRows = filteredData.map((item, index) => ({
+                    "ลำดับ": index + 1,
+                    "HN": item.hn,
+                    "ชื่อ-สกุล": item.name,
+                    "ประเภทลูกค้า": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
+                    "วันลงทะเบียน": item.registrationDate.toLocaleDateString('th-TH'),
+                    "รายการสินค้า": item.items.join(', '),
+                    "วันที่บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH'),
+                    "เบอร์โทรศัพท์": item.phone,
+                    "ยอดซื้อรวม": item.totalPaid
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(exportRows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Customer Analytics");
+                XLSX.writeFile(wb, `Mounjaro_Analytics_${new Date().toISOString().split('T')[0]}.xlsx`);
+            };
+
+            return (
+                <div className="min-h-screen pb-20">
+                    <div className="max-w-7xl mx-auto px-4 py-8">
+                        <header className="flex flex-col md:flex-row justify-between items-end gap-6 mb-10">
+                            <div>
+                                <div className="flex items-center gap-2 text-blue-600 font-bold text-sm mb-2">
+                                    <Icon name="activity" size={16} />
+                                    <span>Mounjaro & Peptide Insights</span>
+                                </div>
+                                <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+                                    Customer <span className="text-blue-600">Analytics</span>
+                                </h1>
+                                <p className="text-slate-500 mt-2">วิเคราะห์กลุ่มลูกค้า แยกประเภทใหม่/เก่า ตามวันลงทะเบียน</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={handleExport} disabled={filteredData.length === 0} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-lg shadow-emerald-200 font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all">
+                                    <Icon name="download" /> Export XLSX
+                                </button>
+                                <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-2xl shadow-sm font-bold hover:bg-slate-50 transition-all">
+                                    <Icon name="upload" className="text-blue-600" /> อัปโหลดไฟล์
+                                </button>
+                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept=".xlsx,.xls,.csv" />
+                            </div>
+                        </header>
+
+                        <div className="bg-white rounded-[2rem] border border-slate-200 p-6 mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-sm">
+                            <div className="relative">
+                                <Icon name="search" className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                                <input type="text" placeholder="ค้นหาชื่อ หรือ HN..." className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                            </div>
+                            <div className="relative">
+                                <Icon name="calendar" className="absolute left-3 top-3.5 text-slate-400" size={16} />
+                                <input type="date" className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none text-sm border-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <span className="absolute -top-2 left-3 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่เริ่ม</span>
+                            </div>
+                            <div className="relative">
+                                <Icon name="calendar" className="absolute left-3 top-3.5 text-slate-400" size={16} />
+                                <input type="date" className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none text-sm border-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                <span className="absolute -top-2 left-3 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่สิ้นสุด</span>
+                            </div>
+                            <div className="relative">
+                                <Icon name="filter" className="absolute left-3 top-3.5 text-slate-400" size={16} />
+                                <select className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none font-bold text-sm appearance-none cursor-pointer" value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
+                                    <option value="date_desc">ล่าสุด - เก่าที่สุด</option>
+                                    <option value="date_asc">เก่าที่สุด - ล่าสุด</option>
+                                    <option value="name_asc">ชื่อ: ก - ฮ</option>
+                                    <option value="name_desc">ชื่อ: ฮ - ก</option>
+                                    <option value="revenue_desc">ยอดซื้อ: มาก - น้อย</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="mb-8 p-4 bg-rose-50 border-l-4 border-rose-500 text-rose-700 flex items-center gap-3 rounded-r-xl">
+                                <Icon name="x" className="text-rose-500" />
+                                <p className="font-bold text-sm">{error}</p>
+                            </div>
+                        )}
+
+                        <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-slate-50/80 text-[10px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
+                                        <tr>
+                                            <th className="px-8 py-5">#</th>
+                                            <th className="px-8 py-5">ข้อมูลลูกค้า</th>
+                                            <th className="px-8 py-5 text-center">สถานะ</th>
+                                            <th className="px-8 py-5">สินค้าที่ซื้อ</th>
+                                            <th className="px-8 py-5 text-center">ลงทะเบียนเมื่อ</th>
+                                            <th className="px-8 py-5 text-right">ยอดซื้อรวม</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {filteredData.length > 0 ? filteredData.map((row, i) => (
+                                            <tr key={row.hn} className="hover:bg-blue-50/40 transition-colors group">
+                                                <td className="px-8 py-6 text-slate-300 font-bold">{i+1}</td>
+                                                <td className="px-8 py-6">
+                                                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{row.name}</p>
+                                                    <p className="text-xs text-slate-400 font-medium">HN: {row.hn}</p>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
+                                                        row.customerStatus === 'ใหม่' 
+                                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                                        : 'bg-slate-50 text-slate-400 border-slate-100'
+                                                    }`}>
+                                                        {row.customerStatus === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="flex flex-wrap gap-1 max-w-xs">
+                                                        {row.items.map((it, idx) => (
+                                                            <span key={idx} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg border border-blue-100/30">
+                                                                {it}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <p className="text-sm font-bold text-slate-600">{row.registrationDate.toLocaleDateString('th-TH')}</p>
+                                                    <p className="text-[10px] text-slate-400 italic">บริการล่าสุด: {row.lastDateObj.toLocaleDateString('th-TH')}</p>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <p className="text-lg font-black text-slate-900 leading-none">{row.totalPaid.toLocaleString()}</p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">{row.count} รายการ</p>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan="6" className="py-32 text-center">
+                                                    <div className="flex flex-col items-center opacity-20">
+                                                        <Icon name="user" size={48} className="mb-4" />
+                                                        <p className="font-bold">ไม่พบข้อมูลลูกค้า</p>
+                                                        <p className="text-sm">กรุณาอัปโหลดไฟล์ หรือปรับเปลี่ยนตัวกรอง</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
