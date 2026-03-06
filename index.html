@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mounjaro Peptide Analytics - New/Old Customer System</title>
+    <title>Mounjaro Injection Tracking - Injection History Focus</title>
     <!-- Dependencies -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -24,7 +24,7 @@
     <script type="text/babel">
         const { useState, useMemo, useRef, useEffect } = React;
 
-        // Simple Icon Components (SVG) - Fixed with Fragments
+        // SVG Icon Components
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7-5-5-5 5m5-5v12"/>,
@@ -34,10 +34,9 @@
                 filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
                 user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
                 users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
-                clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
-                activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
                 dollar: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
-                plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+                syringe: <><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-.7.7-1.6 1.2-2.6 1.5l-4.1.9.9-4.1c.3-1 1.2-1.9 1.5-2.6L14.7 4.7"/><path d="m18 5 3 3"/><path d="m14 10 4 4"/></>,
+                trending: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><path d="M17 6h6v6"/></>,
                 x: <path d="M18 6 6 18M6 6l12 12"/>
             };
             return (
@@ -57,7 +56,7 @@
             const [error, setError] = useState(null);
             const fileInputRef = useRef(null);
 
-            const keywords = ['peptide', 'เปปไทด์', 'mounjaro', 'มอนจาโร', 'slimnow', 'สลิมนาว', 'คุมหิว', 'ปากกา', 'ลดน้ำหนัก'];
+            const keywords = ['peptide', 'เปปไทด์', 'mounjaro', 'mouajaro', 'มอนจาโร', 'slimnow', 'สลิมนาว', 'คุมหิว', 'ปากกา', 'ลดน้ำหนัก'];
 
             const parseDate = (dateStr) => {
                 if (!dateStr) return new Date(0);
@@ -98,19 +97,12 @@
                 const idx = {
                     hn: findIdx(['HN', 'รหัสคนไข้']),
                     name: findIdx(['ชื่อ-สกุล', 'ชื่อ', 'Name']),
-                    group: findIdx(['กลุ่มลูกค้า', 'กลุ่ม']),
-                    phone: findIdx(['เบอร์โทร', 'โทรศัพท์', 'Phone']),
                     item: findIdx(['รายการ', 'ชื่อสินค้า', 'Product']),
                     date: findIdx(['วันที่ขาย', 'วันที่บริการ', 'Date']),
-                    regDate: findIdx(['วันลงทะเบียน', 'วันที่ลงทะเบียน', 'Registration Date', 'Reg Date']),
-                    paid: findIdx(['ยอดชำระ', 'ยอดเงิน', 'Paid'])
+                    regDate: findIdx(['วันลงทะเบียน', 'วันที่ลงทะเบียน', 'Registration Date']),
+                    paid: findIdx(['ยอดชำระ', 'ยอดเงิน', 'Paid']),
+                    qty: findIdx(['จำนวน', 'ครั้ง', 'Qty', 'Amount'])
                 };
-
-                if (idx.hn === -1 || idx.name === -1) {
-                    setError("ไม่พบคอลัมน์ HN หรือ ชื่อ-สกุล กรุณาตรวจสอบหัวตาราง");
-                    setIsProcessing(false);
-                    return;
-                }
 
                 const grouped = {};
                 for (let i = 1; i < rows.length; i++) {
@@ -118,8 +110,14 @@
                     if (!row || !row[idx.hn]) continue;
 
                     const itemName = String(row[idx.item] || "");
-                    if (keywords.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) {
+                    const lowerItem = itemName.toLowerCase();
+                    
+                    const isMounjaroTarget = lowerItem.includes('mounjaro') || lowerItem.includes('mouajaro') || lowerItem.includes('มอนจาโร');
+                    const isAnyTarget = keywords.some(k => lowerItem.includes(k.toLowerCase()));
+
+                    if (isAnyTarget) {
                         const hn = String(row[idx.hn]).trim();
+                        const qty = parseInt(row[idx.qty]) || 0;
                         const paid = parseFloat(String(row[idx.paid] || "0").replace(/,/g, '')) || 0;
                         const serviceDate = parseDate(row[idx.date]);
                         const regDate = parseDate(row[idx.regDate]);
@@ -128,21 +126,39 @@
                             grouped[hn] = {
                                 hn,
                                 name: String(row[idx.name] || "-"),
-                                group: String(row[idx.group] || "-"),
-                                phone: String(row[idx.phone] || "-"),
                                 items: [],
                                 registrationDate: regDate,
                                 lastDateObj: serviceDate,
                                 totalPaid: 0,
+                                mounjaroInjections: 0,
+                                mounjaroDates: [], // เก็บรายการวันที่มาฉีด Mounjaro
+                                totalQty: 0,
                                 count: 0
                             };
                         }
+
+                        if (isMounjaroTarget && lowerItem.includes('[ตัดคอร์ส]')) {
+                            grouped[hn].mounjaroInjections += qty;
+                            grouped[hn].mounjaroDates.push({
+                                dateObj: serviceDate,
+                                dateStr: serviceDate.toLocaleDateString('th-TH'),
+                                qty: qty
+                            });
+                        }
+
                         if (!grouped[hn].items.includes(itemName)) grouped[hn].items.push(itemName);
                         grouped[hn].totalPaid += paid;
+                        grouped[hn].totalQty += qty;
                         grouped[hn].count += 1;
                         if (serviceDate > grouped[hn].lastDateObj) grouped[hn].lastDateObj = serviceDate;
                     }
                 }
+
+                // เรียงวันที่ของแต่ละคน
+                Object.values(grouped).forEach(customer => {
+                    customer.mounjaroDates.sort((a, b) => b.dateObj - a.dateObj);
+                });
+
                 setData(Object.values(grouped));
                 setIsProcessing(false);
             };
@@ -161,13 +177,10 @@
                     return matchesSearch && matchesDate;
                 });
 
-                // ตรวจสอบสถานะลูกค้าใหม่/เก่า
                 result = result.map(item => {
                     let status = "เก่า";
                     if (start && end) {
-                        if (item.registrationDate >= start && item.registrationDate <= end) {
-                            status = "ใหม่";
-                        }
+                        if (item.registrationDate >= start && item.registrationDate <= end) status = "ใหม่";
                     } else if (start) {
                         if (item.registrationDate >= start) status = "ใหม่";
                     }
@@ -183,16 +196,14 @@
                 return result;
             }, [data, searchTerm, startDate, endDate, sortOrder]);
 
-            // คำนวณยอดรวมต่างๆ
             const stats = useMemo(() => {
-                const totals = filteredData.reduce((acc, curr) => {
+                return filteredData.reduce((acc, curr) => {
                     acc.revenue += curr.totalPaid;
-                    if (curr.customerStatus === 'ใหม่') acc.newCustomers += 1;
-                    else acc.oldCustomers += 1;
+                    acc.mounjaroInjections += curr.mounjaroInjections;
+                    if (curr.customerStatus === 'ใหม่') acc.newCount += 1;
+                    else acc.oldCount += 1;
                     return acc;
-                }, { revenue: 0, newCustomers: 0, oldCustomers: 0 });
-                
-                return totals;
+                }, { revenue: 0, mounjaroInjections: 0, newCount: 0, oldCount: 0 });
             }, [filteredData]);
 
             const handleExport = () => {
@@ -201,40 +212,34 @@
                     "ลำดับ": index + 1,
                     "HN": item.hn,
                     "ชื่อ-สกุล": item.name,
-                    "ประเภทลูกค้า": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
+                    "สถานะ": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
                     "วันลงทะเบียน": item.registrationDate.toLocaleDateString('th-TH'),
-                    "รายการสินค้า": item.items.join(', '),
-                    "วันที่บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH'),
-                    "เบอร์โทรศัพท์": item.phone,
-                    "ยอดซื้อรวม": item.totalPaid
+                    "จำนวนฉีด Mounjaro": item.mounjaroInjections,
+                    "ประวัติวันที่ฉีด": item.mounjaroDates.map(d => `${d.dateStr} (${d.qty})`).join(', '),
+                    "ยอดซื้อรวม": item.totalPaid,
+                    "บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH')
                 }));
-
                 const ws = XLSX.utils.json_to_sheet(exportRows);
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Customer Analytics");
-                XLSX.writeFile(wb, `Mounjaro_Analytics_${new Date().toISOString().split('T')[0]}.xlsx`);
+                XLSX.utils.book_append_sheet(wb, ws, "Injection Detail Report");
+                XLSX.writeFile(wb, `Mounjaro_History_${new Date().toISOString().split('T')[0]}.xlsx`);
             };
 
             return (
                 <div className="min-h-screen pb-20">
                     <div className="max-w-7xl mx-auto px-4 py-8">
+                        {/* Header */}
                         <header className="flex flex-col md:flex-row justify-between items-end gap-6 mb-10">
                             <div>
-                                <div className="flex items-center gap-2 text-blue-600 font-bold text-sm mb-2">
-                                    <Icon name="activity" size={16} />
-                                    <span>Mounjaro & Peptide Insights</span>
-                                </div>
-                                <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-                                    Customer <span className="text-blue-600">Analytics</span>
-                                </h1>
-                                <p className="text-slate-500 mt-2">วิเคราะห์กลุ่มลูกค้า แยกประเภทใหม่/เก่า ตามวันลงทะเบียน</p>
+                                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Injection <span className="text-blue-600">History</span></h1>
+                                <p className="text-slate-500 mt-2 font-medium italic underline decoration-blue-200 decoration-2">แสดงประวัติการฉีด Mounjaro [ตัดคอร์ส] รายวัน</p>
                             </div>
                             <div className="flex gap-3">
                                 <button onClick={handleExport} disabled={filteredData.length === 0} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-lg shadow-emerald-200 font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all">
-                                    <Icon name="download" /> Export XLSX
+                                    <Icon name="download" /> Export History
                                 </button>
                                 <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-2xl shadow-sm font-bold hover:bg-slate-50 transition-all">
-                                    <Icon name="upload" className="text-blue-600" /> อัปโหลดไฟล์
+                                    <Icon name="upload" className="text-blue-600" /> อัปโหลดรายงาน
                                 </button>
                                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept=".xlsx,.xls,.csv" />
                             </div>
@@ -242,85 +247,55 @@
 
                         {/* Summary Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ยอดขายรวม</span>
-                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                                        <Icon name="dollar" size={18} />
-                                    </div>
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                <div className="flex justify-between items-start mb-4">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ยอดขายกลุ่มเป้าหมาย</span>
+                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><Icon name="dollar" size={18} /></div>
                                 </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-slate-900">{stats.revenue.toLocaleString()}</h3>
-                                    <p className="text-xs text-slate-400 mt-1 font-bold">บาท (ตามตัวกรอง)</p>
-                                </div>
+                                <h3 className="text-2xl font-black text-slate-900">{stats.revenue.toLocaleString()} <span className="text-xs font-bold text-slate-400">บาท</span></h3>
                             </div>
-                            
-                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ลูกค้าทั้งหมด</span>
-                                    <div className="p-2 bg-slate-50 text-slate-600 rounded-xl">
-                                        <Icon name="users" size={18} />
-                                    </div>
+                            <div className="bg-white p-6 rounded-[2rem] border border-blue-200 shadow-md bg-gradient-to-br from-white to-blue-50/30">
+                                <div className="flex justify-between items-start mb-4">
+                                    <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">ฉีด Mounjaro ทั้งหมด</span>
+                                    <div className="p-2 bg-blue-600 text-white rounded-xl"><Icon name="syringe" size={18} /></div>
                                 </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-slate-900">{filteredData.length}</h3>
-                                    <p className="text-xs text-slate-400 mt-1 font-bold">ราย</p>
-                                </div>
+                                <h3 className="text-2xl font-black text-blue-600">{stats.mounjaroInjections.toLocaleString()} <span className="text-xs font-bold text-blue-400 tracking-tighter uppercase">ครั้ง (Course Only)</span></h3>
                             </div>
-
-                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between border-b-4 border-b-emerald-400">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ลูกค้าใหม่</span>
-                                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                                        <Icon name="plus" size={18} />
-                                    </div>
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm border-b-4 border-b-emerald-400">
+                                <div className="flex justify-between items-start mb-4">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-emerald-600">ลูกค้าใหม่</span>
+                                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><Icon name="users" size={18} /></div>
                                 </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-slate-900">{stats.newCustomers}</h3>
-                                    <p className="text-xs text-emerald-600 mt-1 font-bold">ราย (ลงทะเบียนในรอบนี้)</p>
-                                </div>
+                                <h3 className="text-2xl font-black text-slate-900">{stats.newCount} <span className="text-xs font-bold text-slate-400 tracking-tighter">ราย</span></h3>
                             </div>
-
-                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-                                <div className="flex items-center justify-between mb-4">
+                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                <div className="flex justify-between items-start mb-4">
                                     <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">ลูกค้าเก่า</span>
-                                    <div className="p-2 bg-slate-50 text-slate-400 rounded-xl">
-                                        <Icon name="user" size={18} />
-                                    </div>
+                                    <div className="p-2 bg-slate-50 text-slate-400 rounded-xl"><Icon name="user" size={18} /></div>
                                 </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-slate-900">{stats.oldCustomers}</h3>
-                                    <p className="text-xs text-slate-400 mt-1 font-bold">ราย (ซื้อซ้ำ)</p>
-                                </div>
+                                <h3 className="text-2xl font-black text-slate-900">{stats.oldCount} <span className="text-xs font-bold text-slate-400 tracking-tighter">ราย</span></h3>
                             </div>
                         </div>
 
                         {/* Filters */}
                         <div className="bg-white rounded-[2rem] border border-slate-200 p-6 mb-8 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-sm">
                             <div className="relative">
-                                <Icon name="search" className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                                <input type="text" placeholder="ค้นหาชื่อ หรือ HN..." className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                                <Icon name="search" className="absolute left-4 top-3.5 text-slate-400" size={18} />
+                                <input type="text" placeholder="ค้นชื่อ หรือ HN..." className="w-full bg-slate-50 pl-12 pr-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                             </div>
                             <div className="relative">
-                                <Icon name="calendar" className="absolute left-3 top-3.5 text-slate-400" size={16} />
-                                <input type="date" className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none text-sm border-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                                <span className="absolute -top-2 left-3 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่เริ่ม</span>
+                                <input type="date" className="w-full bg-slate-50 px-4 py-3 rounded-xl outline-none text-sm font-bold border-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่เริ่ม</span>
                             </div>
                             <div className="relative">
-                                <Icon name="calendar" className="absolute left-3 top-3.5 text-slate-400" size={16} />
-                                <input type="date" className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none text-sm border-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                                <span className="absolute -top-2 left-3 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่สิ้นสุด</span>
+                                <input type="date" className="w-full bg-slate-50 px-4 py-3 rounded-xl outline-none text-sm font-bold border-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase">วันที่สิ้นสุด</span>
                             </div>
-                            <div className="relative">
-                                <Icon name="filter" className="absolute left-3 top-3.5 text-slate-400" size={16} />
-                                <select className="w-full bg-slate-50 pl-10 pr-3 py-3 rounded-xl outline-none font-bold text-sm appearance-none cursor-pointer" value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
-                                    <option value="date_desc">ล่าสุด - เก่าที่สุด</option>
-                                    <option value="date_asc">เก่าที่สุด - ล่าสุด</option>
-                                    <option value="name_asc">ชื่อ: ก - ฮ</option>
-                                    <option value="name_desc">ชื่อ: ฮ - ก</option>
-                                    <option value="revenue_desc">ยอดซื้อ: มาก - น้อย</option>
-                                </select>
-                            </div>
+                            <select className="w-full bg-slate-50 px-4 py-3 rounded-xl outline-none font-bold text-sm border-none cursor-pointer appearance-none shadow-sm" value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
+                                <option value="date_desc">บริการล่าสุด</option>
+                                <option value="revenue_desc">ยอดซื้อสูงสุด</option>
+                                <option value="name_asc">ชื่อ ก-ฮ</option>
+                            </select>
                         </div>
 
                         {error && (
@@ -330,16 +305,17 @@
                             </div>
                         )}
 
+                        {/* Table */}
                         <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
                             <div className="overflow-x-auto custom-scrollbar">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-slate-50/80 text-[10px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
                                         <tr>
                                             <th className="px-8 py-5">#</th>
-                                            <th className="px-8 py-5">ข้อมูลลูกค้า</th>
-                                            <th className="px-8 py-5 text-center">สถานะ</th>
-                                            <th className="px-8 py-5">สินค้าที่ซื้อ</th>
-                                            <th className="px-8 py-5 text-center">ลงทะเบียนเมื่อ</th>
+                                            <th className="px-8 py-5">ลูกค้า (HN)</th>
+                                            <th className="px-8 py-5 text-center">ประเภท</th>
+                                            <th className="px-8 py-5 text-center">ประวัติฉีด Mounjaro</th>
+                                            <th className="px-8 py-5">รายการสินค้าอื่น</th>
                                             <th className="px-8 py-5 text-right">ยอดซื้อรวม</th>
                                         </tr>
                                     </thead>
@@ -348,45 +324,52 @@
                                             <tr key={row.hn} className="hover:bg-blue-50/40 transition-colors group">
                                                 <td className="px-8 py-6 text-slate-300 font-bold">{i+1}</td>
                                                 <td className="px-8 py-6">
-                                                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{row.name}</p>
-                                                    <p className="text-xs text-slate-400 font-medium">HN: {row.hn}</p>
+                                                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">{row.name}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold tracking-tighter uppercase mt-0.5">HN: {row.hn}</p>
                                                 </td>
                                                 <td className="px-8 py-6 text-center">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
-                                                        row.customerStatus === 'ใหม่' 
-                                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                                        : 'bg-slate-50 text-slate-400 border-slate-100'
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black border tracking-tighter ${
+                                                        row.customerStatus === 'ใหม่' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
                                                     }`}>
                                                         {row.customerStatus === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า'}
                                                     </span>
                                                 </td>
                                                 <td className="px-8 py-6">
-                                                    <div className="flex flex-wrap gap-1 max-w-xs">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-base font-black px-6 py-2 rounded-2xl mb-3 shadow-sm ${row.mounjaroInjections > 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-300'}`}>
+                                                            {row.mounjaroInjections} ครั้ง
+                                                        </span>
+                                                        {row.mounjaroDates && row.mounjaroDates.length > 0 && (
+                                                            <div className="flex flex-col gap-1.5 w-full max-w-[140px]">
+                                                                {row.mounjaroDates.map((d, idx) => (
+                                                                    <div key={idx} className="flex justify-between items-center text-[10px] text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 font-bold">
+                                                                        <span>{d.dateStr}</span>
+                                                                        <span className="bg-blue-600 text-white px-1.5 rounded-full text-[8px]">{d.qty}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="flex flex-wrap gap-1 max-w-[180px]">
                                                         {row.items.map((it, idx) => (
-                                                            <span key={idx} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg border border-blue-100/30">
+                                                            <span key={idx} className={`text-[9px] px-2 py-0.5 rounded-lg border leading-relaxed ${
+                                                                it.includes('[ตัดคอร์ส]') ? 'bg-blue-100 text-blue-700 border-blue-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-100'
+                                                            }`}>
                                                                 {it}
                                                             </span>
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-6 text-center">
-                                                    <p className="text-sm font-bold text-slate-600">{row.registrationDate.toLocaleDateString('th-TH')}</p>
-                                                    <p className="text-[10px] text-slate-400 italic">บริการล่าสุด: {row.lastDateObj.toLocaleDateString('th-TH')}</p>
-                                                </td>
                                                 <td className="px-8 py-6 text-right">
-                                                    <p className="text-lg font-black text-slate-900 leading-none">{row.totalPaid.toLocaleString()}</p>
-                                                    <p className="text-[10px] text-slate-400 mt-1">{row.count} รายการ</p>
+                                                    <p className="text-xl font-black text-slate-900 tracking-tighter leading-none">{row.totalPaid.toLocaleString()}</p>
+                                                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{row.count} ITEMS</p>
                                                 </td>
                                             </tr>
                                         )) : (
                                             <tr>
-                                                <td colSpan="6" className="py-32 text-center">
-                                                    <div className="flex flex-col items-center opacity-20">
-                                                        <Icon name="user" size={48} className="mb-4" />
-                                                        <p className="font-bold">ไม่พบข้อมูลลูกค้า</p>
-                                                        <p className="text-sm">กรุณาอัปโหลดไฟล์ หรือปรับเปลี่ยนตัวกรอง</p>
-                                                    </div>
-                                                </td>
+                                                <td colSpan="6" className="py-32 text-center opacity-30 font-bold italic">ไม่พบข้อมูล... กรุณาอัปโหลดไฟล์</td>
                                             </tr>
                                         )}
                                     </tbody>
