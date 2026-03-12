@@ -69,8 +69,8 @@
             const [sortConfig, setSortConfig] = useState({ key: 'lastDateObj', direction: 'desc' });
             const [isProcessing, setIsProcessing] = useState(false);
             const [error, setError] = useState(null);
-            const [showSummaryModal, setShowSummaryModal] = useState(false); // State for Summary Modal
-            const [copySuccess, setCopySuccess] = useState(false); // State for copy button
+            const [showSummaryModal, setShowSummaryModal] = useState(false);
+            const [copySuccess, setCopySuccess] = useState(false);
             const fileInputRef = useRef(null);
 
             const keywords = ['peptide', 'เปปไทด์', 'mounjaro', 'mouajaro', 'มอนจาโร', 'slimnow', 'สลิมนาว', 'คุมหิว', 'ปากกา', 'ลดน้ำหนัก'];
@@ -115,6 +115,7 @@
                 const idx = {
                     hn: findIdx(['HN', 'รหัสคนไข้']),
                     name: findIdx(['ชื่อ-สกุล', 'ชื่อ', 'Name']),
+                    phone: findIdx(['เบอร์โทร', 'โทรศัพท์', 'เบอร์ติดต่อ', 'Phone', 'Tel', 'Mobile']),
                     item: findIdx(['รายการ', 'ชื่อสินค้า', 'Product']),
                     date: findIdx(['วันที่ขาย', 'วันที่บริการ', 'Date']),
                     regDate: findIdx(['วันลงทะเบียน', 'วันที่ลงทะเบียน', 'Registration Date']),
@@ -139,11 +140,13 @@
                         const paid = parseFloat(String(row[idx.paid] || "0").replace(/,/g, '')) || 0;
                         const serviceDate = parseDate(row[idx.date]);
                         const regDate = parseDate(row[idx.regDate]);
+                        const phoneVal = idx.phone !== -1 && row[idx.phone] ? String(row[idx.phone]).trim() : "-";
 
                         if (!grouped[hn]) {
                             grouped[hn] = {
                                 hn,
                                 name: String(row[idx.name] || "-"),
+                                phone: phoneVal,
                                 items: [],
                                 registrationDate: regDate,
                                 lastDateObj: serviceDate,
@@ -171,6 +174,11 @@
                         }
 
                         if (!grouped[hn].items.includes(itemName)) grouped[hn].items.push(itemName);
+                        
+                        if (grouped[hn].phone === "-" && phoneVal !== "-") {
+                            grouped[hn].phone = phoneVal;
+                        }
+
                         grouped[hn].totalPaid += paid;
                         grouped[hn].totalQty += qty;
                         grouped[hn].count += 1;
@@ -232,7 +240,6 @@
                 return result;
             }, [data, searchTerm, startDate, endDate, sortConfig]);
 
-            // อัปเดต Stats เพื่อเก็บข้อมูล Breakdown การฉีด
             const stats = useMemo(() => {
                 return filteredData.reduce((acc, curr) => {
                     acc.revenue += curr.totalPaid;
@@ -243,11 +250,10 @@
                     else acc.oldCount += 1;
                     
                     if (curr.totalPaid > 0) acc.buyingCustomers += 1;
-                    if (curr.mounjaroPaid > 0) acc.mounjaroBuyingCustomers += 1; // ยอดซื้อเฉพาะ Mounjaro
+                    if (curr.mounjaroPaid > 0) acc.mounjaroBuyingCustomers += 1;
                     
                     if (curr.mounjaroInjections > 0) {
                         acc.injectionCustomers += 1;
-                        // นับจำนวนคนตามจำนวนครั้งที่ฉีด
                         acc.injectionBreakdown[curr.mounjaroInjections] = (acc.injectionBreakdown[curr.mounjaroInjections] || 0) + 1;
                     }
                     
@@ -276,17 +282,20 @@
                 return sortConfig.direction === 'asc' ? <Icon name="arrowUp" size={12} className="text-blue-600 ml-1" /> : <Icon name="arrowDown" size={12} className="text-blue-600 ml-1" />;
             };
 
+            // ---- เพิ่มการส่งออก "รายการสินค้าอื่น" ที่นี่ ----
             const handleExport = () => {
                 if (filteredData.length === 0) return;
                 const exportRows = filteredData.map((item, index) => ({
                     "ลำดับ": index + 1,
                     "HN": item.hn,
                     "ชื่อ-สกุล": item.name,
+                    "เบอร์โทร": item.phone || "-",
                     "ประเภทลูกค้า": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
                     "จำนวนฉีด Mounjaro": item.mounjaroInjections,
                     "ยอดซื้อเฉพาะ Mounjaro": item.mounjaroPaid,
                     "บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH'),
                     "ประวัติวันที่ฉีด": item.mounjaroDates.map(d => `${d.dateStr} (${d.qty})`).join(', '),
+                    "รายการสินค้าอื่น": item.items.join(', '), // เพิ่มรายการสินค้าเชื่อมด้วยลูกน้ำ
                     "ยอดซื้อรวมทั้งหมด": item.totalPaid
                 }));
                 const ws = XLSX.utils.json_to_sheet(exportRows);
@@ -321,7 +330,6 @@
                     text += `ยังไม่มีข้อมูลการฉีด\n`;
                 }
 
-                // Copy using document.execCommand for iframe compatibility
                 const textArea = document.createElement("textarea");
                 textArea.value = text;
                 document.body.appendChild(textArea);
@@ -350,7 +358,6 @@
                                     <Icon name="refresh" size={18} /> รีเฟรช
                                 </button>
                                 
-                                {/* ปุ่มสรุปข้อมูล */}
                                 <button onClick={() => setShowSummaryModal(true)} disabled={filteredData.length === 0} className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-lg shadow-indigo-200 font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
                                     <Icon name="pieChart" /> สรุปข้อมูล
                                 </button>
