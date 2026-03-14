@@ -1,662 +1,1038 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mounjaro Injection Tracking - Summary Dashboard Pro</title>
-    <!-- Dependencies -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
-        body { font-family: 'Sarabun', sans-serif; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .sort-header { cursor: pointer; user-select: none; transition: background-color 0.2s; }
-        .sort-header:hover { background-color: #f1f5f9; }
-        
-        /* Animation for modal */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95) translateY(10px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Mounjaro Dashboard v3.1</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
+*{box-sizing:border-box;}
+body{font-family:'Sarabun',sans-serif;background:#f8fafc;margin:0;}
+.cs::-webkit-scrollbar{width:5px;height:5px;}
+.cs::-webkit-scrollbar-track{background:#f1f5f9;}
+.cs::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px;}
+.sh{cursor:pointer;user-select:none;}
+.sh:hover{background:#f1f5f9;}
+@keyframes fadeIn{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes slideDown{from{opacity:0;max-height:0}to{opacity:1;max-height:2000px}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.slide-down{animation:slideDown .25s ease-out;overflow:hidden;}
+.drop-zone{border:2.5px dashed #cbd5e1;transition:all .2s;cursor:pointer;}
+.drop-zone.done{border-color:#10b981;border-style:solid;background:#f0fdf4;}
+.drop-zone:hover:not(.done){border-color:#93c5fd;background:#eff6ff;}
+.bm{background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;}
+.bp{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;}
+.bk{background:#fdf4ff;color:#9333ea;border:1px solid #e9d5ff;}
+.bs{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;}
+.bo{background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;}
+</style>
 </head>
-<body class="bg-slate-50">
-    <div id="root"></div>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useMemo, useRef } = React;
 
-    <script type="text/babel">
-        const { useState, useMemo, useRef, useEffect } = React;
+/* ── Icons ── */
+const Ic = ({ n, s=18, c='' }) => {
+  const d = {
+    upload:  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7-5-5-5 5m5-5v12"/>,
+    dl:      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m-7-11v12m-4-4 4 4 4-4"/>,
+    srch:    <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
+    cal:     <><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>,
+    dollar:  <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
+    syringe: <><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-.7.7-1.6 1.2-2.6 1.5l-4.1.9.9-4.1c.3-1 1.2-1.9 1.5-2.6L14.7 4.7"/><path d="m18 5 3 3"/><path d="m14 10 4 4"/></>,
+    refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></>,
+    x:       <path d="M18 6 6 18M6 6l12 12"/>,
+    aUp:     <path d="m18 15-6-6-6 6"/>,
+    aDn:     <path d="m6 9 6 6 6-6"/>,
+    aUD:     <><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></>,
+    pie:     <><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></>,
+    copy:    <><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></>,
+    check:   <polyline points="20 6 9 17 4 12"/>,
+    alert:   <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
+    hist:    <><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></>,
+    tag:     <><path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.41 0l7.29-7.29a1 1 0 0 0 0-1.41L12 2z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></>,
+    img:     <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
+  };
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={c}>
+      {d[n]}
+    </svg>
+  );
+};
 
-        // SVG Icon Components
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const icons = {
-                upload: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7-5-5-5 5m5-5v12"/>,
-                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m-7-11v12m-4-4 4 4 4-4"/>,
-                search: <><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></>,
-                calendar: <><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></>,
-                filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
-                user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
-                users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
-                dollar: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></>,
-                syringe: <><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-.7.7-1.6 1.2-2.6 1.5l-4.1.9.9-4.1c.3-1 1.2-1.9 1.5-2.6L14.7 4.7"/><path d="m18 5 3 3"/><path d="m14 10 4 4"/></>,
-                refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></>,
-                shopping: <><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></>,
-                x: <path d="M18 6 6 18M6 6l12 12"/>,
-                arrowUp: <path d="m18 15-6-6-6 6"/>,
-                arrowDown: <path d="m6 9 6 6 6-6"/>,
-                arrowUpDown: <><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></>,
-                pieChart: <><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></>,
-                copy: <><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></>,
-                check: <polyline points="20 6 9 17 4 12"/>
-            };
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    {icons[name]}
-                </svg>
-            );
-        };
+/* ── Constants ── */
+const KW = ['peptide','เปปไทด์','mounjaro','mouajaro','มอนจาโร','slimnow','สลิมนาว','คุมหิว','ปากกา','ลดน้ำหนัก'];
+const TM = {
+  mounjaro: { label:'Mounjaro',        cls:'bm', dot:'#3b82f6' },
+  peptide:  { label:'PEPTIDE คุมหิว',  cls:'bp', dot:'#22c55e' },
+  paka:     { label:'ปากกาลดน้ำหนัก', cls:'bk', dot:'#a855f7' },
+  slim:     { label:'SlimNow',         cls:'bs', dot:'#f97316' },
+  other:    { label:'อื่นๆ',           cls:'bo', dot:'#94a3b8' },
+};
 
-        const App = () => {
-            const [data, setData] = useState([]);
-            const [searchTerm, setSearchTerm] = useState('');
-            const [startDate, setStartDate] = useState('');
-            const [endDate, setEndDate] = useState('');
-            const [sortConfig, setSortConfig] = useState({ key: 'lastDateObj', direction: 'desc' });
-            const [isProcessing, setIsProcessing] = useState(false);
-            const [error, setError] = useState(null);
-            const [showSummaryModal, setShowSummaryModal] = useState(false);
-            const [copySuccess, setCopySuccess] = useState(false);
-            const fileInputRef = useRef(null);
+/* ── Helpers ── */
+const getType = (item) => {
+  const l = item.toLowerCase();
+  if (l.includes('mounjaro') || l.includes('mouajaro') || l.includes('มอนจาโร')) return 'mounjaro';
+  if (l.includes('peptide')  || l.includes('เปปไทด์')  || l.includes('คุมหิว'))  return 'peptide';
+  if (l.includes('ปากกา')   || l.includes('ลดน้ำหนัก'))                          return 'paka';
+  if (l.includes('slimnow')  || l.includes('สลิมนาว'))                            return 'slim';
+  return 'other';
+};
 
-            const keywords = ['peptide', 'เปปไทด์', 'mounjaro', 'mouajaro', 'มอนจาโร', 'slimnow', 'สลิมนาว', 'คุมหิว', 'ปากกา', 'ลดน้ำหนัก'];
+const pDate = (v) => {
+  if (!v) return new Date(0);
+  if (typeof v === 'number') return new Date((v - 25569) * 86400 * 1000);
+  const s = String(v).trim();
+  
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    return new Date((parseFloat(s) - 25569) * 86400 * 1000);
+  }
 
-            const parseDate = (dateStr) => {
-                if (!dateStr) return new Date(0);
-                if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
-                const parts = String(dateStr).split('/');
-                if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
-                const isoDate = new Date(dateStr);
-                return isNaN(isoDate.getTime()) ? new Date(0) : isoDate;
-            };
+  const p = s.split('/');
+  if (p.length === 3) {
+    const [dd, mm, yy] = p;
+    return new Date(+yy < 100 ? +yy + 2000 : +yy, +mm - 1, +dd);
+  }
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? new Date(0) : dt;
+};
 
-            const handleFileUpload = (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                setIsProcessing(true);
-                setError(null);
+const fmt = (d) =>
+  d && d.getTime() > 0
+    ? d.toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '-';
 
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const bstr = e.target.result;
-                        const workbook = XLSX.read(bstr, { type: 'binary' });
-                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                        processRawData(rows);
-                    } catch (err) {
-                        setError("ไม่สามารถประมวลผลไฟล์ได้ กรุณาตรวจสอบรูปแบบไฟล์ Excel");
-                        setIsProcessing(false);
-                    }
-                };
-                reader.readAsBinaryString(file);
-                event.target.value = '';
-            };
+const normHN = (v) => String(v || '').trim();
 
-            const processRawData = (rows) => {
-                if (rows.length < 2) { setError("ไม่พบข้อมูลในไฟล์"); setIsProcessing(false); return; }
-                const headers = rows[0].map(h => String(h).trim());
-                const findIdx = (names) => headers.findIndex(h => names.some(n => h.includes(n)));
+/* ── Parse Sales ── */
+const parseSales = (rows) => {
+  const H = rows[0].map(h => String(h || '').trim());
+  const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
+  const idx = {
+    date:    fi(['วันที่ขาย','วันที่บริการ']),
+    hn:      fi(['HN','รหัสคนไข้']),
+    name:    fi(['ชื่อ-สกุล','ชื่อ']),
+    regDate: fi(['วันลงทะเบียน']),
+    phone:   fi(['เบอร์โทร','โทรศัพท์','Tel','Mobile']),
+    item:    fi(['รายการ','ชื่อสินค้า']),
+    qty:     fi(['จำนวน','ครั้ง','Qty']),
+    paid:    fi(['ยอดชำระ','ยอดเงิน']),
+    ptype:   fi(['ประเภทชำระ','ประเภท']),
+  };
+  const G = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[idx.hn]) continue;
+    const itemName = String(r[idx.item] || '');
+    if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
+    const hn      = normHN(r[idx.hn]);
+    const qty     = parseFloat(r[idx.qty]) || 0;
+    const paid    = parseFloat(String(r[idx.paid] || '0').replace(/,/g, '')) || 0;
+    const ptype   = String(r[idx.ptype] || '');
+    const sDate   = pDate(r[idx.date]);
+    const regDate = pDate(r[idx.regDate]);
+    const phone   = idx.phone !== -1 && r[idx.phone] ? String(r[idx.phone]).trim() : '-';
+    const iType   = getType(itemName);
+    const isMj    = iType === 'mounjaro';
+    const isCourse  = itemName.toLowerCase().includes('[ตัดคอร์ส]');
+    const isDebtPay = ptype === 'ชำระหนี้';
+    if (!G[hn]) {
+      G[hn] = {
+        hn, name: String(r[idx.name] || '-'), phone, regDate,
+        lastDate: sDate, totalPaid: 0, debtPaid: 0,
+        mounjaroInj: 0, mounjaroPaid: 0, mounjaroDates: [],
+        peptideInj: 0, pakaInj: 0,
+        hasMounjaro: false, hasPeptide: false, hasPaka: false,
+        serviceHistory: [], itemTypesUsed: new Set(),
+        debtAmount: 0, debtItems: [],
+      };
+    }
+    const g = G[hn];
+    if (phone !== '-' && g.phone === '-') g.phone = phone;
+    if (sDate > g.lastDate) g.lastDate = sDate;
+    g.itemTypesUsed.add(iType);
+    g.serviceHistory.push({ date: sDate, dateStr: fmt(sDate), item: itemName, qty, paid, ptype, iType, isCourse, isDebtPay });
+    if (isDebtPay) { g.debtPaid += paid; } else { g.totalPaid += paid; }
+    if (isMj) {
+      g.hasMounjaro = true;
+      if (!isDebtPay) g.mounjaroPaid += paid;
+      if (isCourse) {
+        const injQty = Math.round(qty);
+        if (injQty > 0) {
+          g.mounjaroInj += injQty;
+          g.mounjaroDates.push({ dateObj: sDate, dateStr: fmt(sDate), qty: injQty });
+        }
+      }
+    }
+    if (iType === 'peptide') { g.hasPeptide = true; if (isCourse) g.peptideInj += Math.round(qty); }
+    if (iType === 'paka')    { g.hasPaka   = true; if (isCourse) g.pakaInj    += Math.round(qty); }
+  }
+  Object.values(G).forEach(g => {
+    g.serviceHistory.sort((a, b) => a.date - b.date);
+    g.mounjaroDates.sort((a, b) => b.dateObj - a.dateObj);
+    g.itemTypesUsed = Array.from(g.itemTypesUsed);
+  });
+  return G;
+};
 
-                const idx = {
-                    hn: findIdx(['HN', 'รหัสคนไข้']),
-                    name: findIdx(['ชื่อ-สกุล', 'ชื่อ', 'Name']),
-                    phone: findIdx(['เบอร์โทร', 'โทรศัพท์', 'เบอร์ติดต่อ', 'Phone', 'Tel', 'Mobile']),
-                    item: findIdx(['รายการ', 'ชื่อสินค้า', 'Product']),
-                    date: findIdx(['วันที่ขาย', 'วันที่บริการ', 'Date']),
-                    regDate: findIdx(['วันลงทะเบียน', 'วันที่ลงทะเบียน', 'Registration Date']),
-                    paid: findIdx(['ยอดชำระ', 'ยอดเงิน', 'Paid']),
-                    qty: findIdx(['จำนวน', 'ครั้ง', 'Qty', 'Amount'])
-                };
+/* ── Parse Debt ── */
+const parseDebt = (rows) => {
+  const H = rows[0].map(h => String(h || '').trim());
+  const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
+  
+  const idx = {
+    name:   fi(['ชื่อลูกค้า', 'ชื่อ-สกุล']), 
+    item:   fi(['รายการ']), 
+    date:   fi(['วันที่']), 
+    amount: fi(['คงเหลือ', 'ค้างชำระ']), 
+    status: fi(['สถานะ']),
+  };
 
-                const grouped = {};
-                for (let i = 1; i < rows.length; i++) {
-                    const row = rows[i];
-                    if (!row || !row[idx.hn]) continue;
+  const D = {};
+  let curHN = null, curName = null, curPhone = null;
 
-                    const itemName = String(row[idx.item] || "");
-                    const lowerItem = itemName.toLowerCase();
-                    
-                    const isMounjaroTarget = lowerItem.includes('mounjaro') || lowerItem.includes('mouajaro') || lowerItem.includes('มอนจาโร');
-                    const isAnyTarget = keywords.some(k => lowerItem.includes(k.toLowerCase()));
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length === 0) continue;
 
-                    if (isAnyTarget) {
-                        const hn = String(row[idx.hn]).trim();
-                        const qty = parseInt(row[idx.qty]) || 0;
-                        const paid = parseFloat(String(row[idx.paid] || "0").replace(/,/g, '')) || 0;
-                        const serviceDate = parseDate(row[idx.date]);
-                        const regDate = parseDate(row[idx.regDate]);
-                        const phoneVal = idx.phone !== -1 && row[idx.phone] ? String(row[idx.phone]).trim() : "-";
+    const colName = String(r[idx.name > -1 ? idx.name : 1] || '').trim();
+    
+    if (colName && colName !== 'รวม' && colName.includes('/')) {
+      const parts = colName.split('/');
+      curName = parts[0].trim();
+      curHN = normHN(parts[1]);
+      curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
+      continue;
+    }
 
-                        if (!grouped[hn]) {
-                            grouped[hn] = {
-                                hn,
-                                name: String(row[idx.name] || "-"),
-                                phone: phoneVal,
-                                items: [],
-                                registrationDate: regDate,
-                                lastDateObj: serviceDate,
-                                totalPaid: 0,
-                                mounjaroInjections: 0,
-                                mounjaroPaid: 0,
-                                mounjaroDates: [],
-                                totalQty: 0,
-                                count: 0,
-                                hasMounjaro: false
-                            };
-                        }
+    if (!curHN) continue;
 
-                        if (isMounjaroTarget) {
-                            grouped[hn].hasMounjaro = true;
-                            grouped[hn].mounjaroPaid += paid;
-                            if (lowerItem.includes('[ตัดคอร์ส]')) {
-                                grouped[hn].mounjaroInjections += qty;
-                                grouped[hn].mounjaroDates.push({
-                                    dateObj: serviceDate,
-                                    dateStr: serviceDate.toLocaleDateString('th-TH'),
-                                    qty: qty
-                                });
-                            }
-                        }
+    const itemName = String(r[idx.item > -1 ? idx.item : 3] || '').trim();
+    if (!itemName || itemName === 'รวม') continue;
 
-                        if (!grouped[hn].items.includes(itemName)) grouped[hn].items.push(itemName);
-                        
-                        if (grouped[hn].phone === "-" && phoneVal !== "-") {
-                            grouped[hn].phone = phoneVal;
-                        }
+    if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
 
-                        grouped[hn].totalPaid += paid;
-                        grouped[hn].totalQty += qty;
-                        grouped[hn].count += 1;
-                        if (serviceDate > grouped[hn].lastDateObj) grouped[hn].lastDateObj = serviceDate;
-                    }
-                }
+    const amtCol = idx.amount > -1 ? idx.amount : (r.length - 1);
+    const amtStr = String(r[amtCol] || '0').replace(/,/g, '');
+    const amt = Math.abs(parseFloat(amtStr) || 0);
+    
+    if (amt === 0) continue;
 
-                Object.values(grouped).forEach(customer => {
-                    customer.mounjaroDates.sort((a, b) => b.dateObj - a.dateObj);
-                });
+    const dCol = idx.date > -1 ? idx.date : 5;
+    const date = pDate(r[dCol]);
+    const statusStr = idx.status !== -1 ? String(r[idx.status] || '') : 'ค้างชำระ';
 
-                setData(Object.values(grouped));
-                setIsProcessing(false);
-            };
+    if (!D[curHN]) {
+      D[curHN] = { hn: curHN, name: curName, phone: curPhone, totalDebt: 0, items: [] };
+    }
+    D[curHN].totalDebt += amt;
+    D[curHN].items.push({ 
+      item: itemName, 
+      amount: amt, 
+      status: statusStr, 
+      date, 
+      dateStr: fmt(date), 
+      overdue: statusStr.includes('เกิน') 
+    });
+  }
+  return D;
+};
 
-            const handleSort = (key) => {
-                let direction = 'desc';
-                if (sortConfig.key === key && sortConfig.direction === 'desc') {
-                    direction = 'asc';
-                }
-                setSortConfig({ key, direction });
-            };
+/* ── Upload Zone ── */
+const UpZone = ({ label, sub, done, fname, onFile }) => {
+  const [drag, setDrag] = useState(false);
+  const ref = useRef();
+  return (
+    <div
+      className={`drop-zone rounded-3xl p-5 flex flex-col items-center justify-center gap-2 ${done ? 'done' : ''}`}
+      style={{ minHeight: 108 }}
+      onDragOver={e => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={e => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); }}
+      onClick={() => ref.current.click()}
+    >
+      <input ref={ref} type="file" style={{ display:'none' }} accept=".xlsx,.xls,.csv"
+        onChange={e => { if (e.target.files[0]) onFile(e.target.files[0]); e.target.value = ''; }} />
+      {done ? (
+        <>
+          <Ic n="check" s={26} c="text-emerald-500" />
+          <p className="font-black text-emerald-700 text-sm">{label}</p>
+          <p className="text-xs text-emerald-500 truncate max-w-xs">{fname}</p>
+        </>
+      ) : (
+        <>
+          <Ic n="upload" s={26} c="text-slate-400" />
+          <p className="font-black text-slate-600 text-sm text-center">{label}</p>
+          <p className="text-xs text-slate-400 text-center">{sub}</p>
+        </>
+      )}
+    </div>
+  );
+};
 
-            const filteredData = useMemo(() => {
-                const start = startDate ? new Date(startDate) : null;
-                const end = endDate ? new Date(endDate) : null;
-                if (start) start.setHours(0,0,0,0);
-                if (end) end.setHours(23,59,59,999);
-
-                let result = data.filter(item => {
-                    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.hn.includes(searchTerm);
-                    let matchesDate = true;
-                    if (start) matchesDate = matchesDate && item.lastDateObj >= start;
-                    if (end) matchesDate = matchesDate && item.lastDateObj <= end;
-                    return matchesSearch && matchesDate;
-                });
-
-                result = result.map(item => {
-                    let status = "เก่า";
-                    if (start && end) {
-                        if (item.registrationDate >= start && item.registrationDate <= end) status = "ใหม่";
-                    } else if (start) {
-                        if (item.registrationDate >= start) status = "ใหม่";
-                    }
-                    return { ...item, customerStatus: status };
-                });
-
-                result.sort((a, b) => {
-                    let valA = a[sortConfig.key];
-                    let valB = b[sortConfig.key];
-                    if (typeof valA === 'string' && sortConfig.key === 'name') {
-                        return sortConfig.direction === 'asc' ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
-                    }
-                    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                    return 0;
-                });
-
-                return result;
-            }, [data, searchTerm, startDate, endDate, sortConfig]);
-
-            const stats = useMemo(() => {
-                return filteredData.reduce((acc, curr) => {
-                    acc.revenue += curr.totalPaid;
-                    acc.mounjaroInjections += curr.mounjaroInjections;
-                    acc.mounjaroRevenue += curr.mounjaroPaid;
-                    
-                    if (curr.customerStatus === 'ใหม่') acc.newCount += 1;
-                    else acc.oldCount += 1;
-                    
-                    if (curr.totalPaid > 0) acc.buyingCustomers += 1;
-                    if (curr.mounjaroPaid > 0) acc.mounjaroBuyingCustomers += 1;
-                    
-                    if (curr.mounjaroInjections > 0) {
-                        acc.injectionCustomers += 1;
-                        acc.injectionBreakdown[curr.mounjaroInjections] = (acc.injectionBreakdown[curr.mounjaroInjections] || 0) + 1;
-                    }
-                    
-                    if (curr.hasMounjaro) acc.mounjaroUniqueCustomers += 1;
-                    
-                    return acc;
-                }, { 
-                    revenue: 0, mounjaroInjections: 0, mounjaroRevenue: 0, 
-                    newCount: 0, oldCount: 0, buyingCustomers: 0, mounjaroBuyingCustomers: 0, 
-                    injectionCustomers: 0, mounjaroUniqueCustomers: 0,
-                    injectionBreakdown: {} 
-                });
-            }, [filteredData]);
-
-            const handleReset = () => {
-                setData([]);
-                setSearchTerm('');
-                setStartDate('');
-                setEndDate('');
-                setSortConfig({ key: 'lastDateObj', direction: 'desc' });
-                setError(null);
-            };
-
-            const getSortIcon = (key) => {
-                if (sortConfig.key !== key) return <Icon name="arrowUpDown" size={12} className="text-slate-300 ml-1 opacity-50" />;
-                return sortConfig.direction === 'asc' ? <Icon name="arrowUp" size={12} className="text-blue-600 ml-1" /> : <Icon name="arrowDown" size={12} className="text-blue-600 ml-1" />;
-            };
-
-            // ---- เพิ่มการส่งออก "รายการสินค้าอื่น" ที่นี่ ----
-            const handleExport = () => {
-                if (filteredData.length === 0) return;
-                const exportRows = filteredData.map((item, index) => ({
-                    "ลำดับ": index + 1,
-                    "HN": item.hn,
-                    "ชื่อ-สกุล": item.name,
-                    "เบอร์โทร": item.phone || "-",
-                    "ประเภทลูกค้า": item.customerStatus === "ใหม่" ? "ลูกค้าใหม่" : "ลูกค้าเก่า",
-                    "จำนวนฉีด Mounjaro": item.mounjaroInjections,
-                    "ยอดซื้อเฉพาะ Mounjaro": item.mounjaroPaid,
-                    "บริการล่าสุด": item.lastDateObj.toLocaleDateString('th-TH'),
-                    "ประวัติวันที่ฉีด": item.mounjaroDates.map(d => `${d.dateStr} (${d.qty})`).join(', '),
-                    "รายการสินค้าอื่น": item.items.join(', '), // เพิ่มรายการสินค้าเชื่อมด้วยลูกน้ำ
-                    "ยอดซื้อรวมทั้งหมด": item.totalPaid
-                }));
-                const ws = XLSX.utils.json_to_sheet(exportRows);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Injection Detail Report");
-                XLSX.writeFile(wb, `Mounjaro_History_${new Date().toISOString().split('T')[0]}.xlsx`);
-            };
-
-            const handleCopySummary = () => {
-                let text = `สรุปข้อมูล Mounjaro\n`;
-                text += `=========================\n`;
-                text += `ลูกค้าทั้งหมด:\t\t${filteredData.length} คน\n`;
-                text += `ลูกค้า Mounjaro:\t${stats.mounjaroUniqueCustomers} คน\n`;
-                text += `ที่มีการซื้อ Mounjaro:\t${stats.mounjaroBuyingCustomers} คน\n`;
-                text += `ที่เข้ามาฉีดจริง:\t\t${stats.injectionCustomers} คน\n`;
-                text += `ฉีด Mounjaro ทั้งหมด:\t${stats.mounjaroInjections} ครั้ง\n`;
-                text += `ลูกค้าใหม่:\t\t${stats.newCount} คน\n`;
-                text += `ลูกค้าเก่า:\t\t${stats.oldCount} คน\n`;
-                text += `-------------------------\n`;
-                text += `ยอดขาย Mounjaro:\t฿${stats.mounjaroRevenue.toLocaleString()}\n`;
-                text += `ยอดขายรวมทั้งหมด:\t฿${stats.revenue.toLocaleString()}\n`;
-                text += `-------------------------\n`;
-                text += `ลูกค้าฉีดกี่ครั้งมีกี่คน (เฉพาะผู้ที่ฉีดจริง):\n`;
-                
-                if (Object.keys(stats.injectionBreakdown).length > 0) {
-                    Object.entries(stats.injectionBreakdown)
-                        .sort((a, b) => Number(a[0]) - Number(b[0]))
-                        .forEach(([times, count]) => {
-                            text += `- ฉีด ${times} ครั้ง:\t\t${count} คน\n`;
-                        });
-                } else {
-                    text += `ยังไม่มีข้อมูลการฉีด\n`;
-                }
-
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    setCopySuccess(true);
-                    setTimeout(() => setCopySuccess(false), 2000);
-                } catch (err) {
-                    console.error('Failed to copy', err);
-                }
-                document.body.removeChild(textArea);
-            };
-
-            return (
-                <div className="min-h-screen pb-20 relative">
-                    <div className="max-w-7xl mx-auto px-4 py-8">
-                        {/* Header */}
-                        <header className="flex flex-col md:flex-row justify-between items-end gap-6 mb-10">
-                            <div>
-                                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Injection <span className="text-blue-600">History</span></h1>
-                                <p className="text-slate-500 mt-2 font-medium italic underline decoration-blue-200 decoration-2">ระบบวิเคราะห์ข้อมูลลูกค้า Mounjaro แบบครบวงจร</p>
-                            </div>
-                            <div className="flex flex-wrap justify-end gap-3">
-                                <button onClick={handleReset} className="flex items-center gap-2 bg-white border border-rose-100 text-rose-500 px-6 py-3 rounded-2xl shadow-sm font-bold hover:bg-rose-50 transition-all">
-                                    <Icon name="refresh" size={18} /> รีเฟรช
-                                </button>
-                                
-                                <button onClick={() => setShowSummaryModal(true)} disabled={filteredData.length === 0} className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl shadow-lg shadow-indigo-200 font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
-                                    <Icon name="pieChart" /> สรุปข้อมูล
-                                </button>
-
-                                <button onClick={handleExport} disabled={filteredData.length === 0} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-lg shadow-emerald-200 font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all">
-                                    <Icon name="download" /> Export XLSX
-                                </button>
-                                <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-2xl shadow-sm font-bold hover:bg-slate-50 transition-all">
-                                    <Icon name="upload" className="text-blue-600" /> อัปโหลด
-                                </button>
-                                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept=".xlsx,.xls,.csv" />
-                            </div>
-                        </header>
-
-                        {/* Stats Group 1: Revenue & Injections */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-5">
-                                <div className="p-4 bg-blue-50 text-blue-600 rounded-3xl"><Icon name="dollar" size={32} /></div>
-                                <div>
-                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">ยอดขายรวมกลุ่มเป้าหมาย</span>
-                                    <h3 className="text-3xl font-black text-slate-900">{stats.revenue.toLocaleString()} <span className="text-sm font-bold text-slate-400">บาท</span></h3>
-                                </div>
-                            </div>
-                            <div className="bg-white p-6 rounded-[2rem] border border-blue-200 shadow-md bg-gradient-to-br from-white to-blue-50/30 flex items-center gap-5">
-                                <div className="p-4 bg-blue-600 text-white rounded-3xl"><Icon name="syringe" size={32} /></div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest block">ฉีด Mounjaro ทั้งหมด</span>
-                                        <div className="text-right">
-                                            <span className="text-[10px] font-black uppercase text-emerald-600 block">ยอดขาย Mounjaro</span>
-                                            <span className="text-sm font-black text-emerald-600 tracking-tighter">฿{stats.mounjaroRevenue.toLocaleString()}</span>
-                                        </div>
-                                    </div>
-                                    <h3 className="text-3xl font-black text-blue-600">{stats.mounjaroInjections.toLocaleString()} <span className="text-sm font-bold">ครั้ง</span></h3>
-                                </div>
-                            </div>
+/* ── Service Timeline ── */
+const ServiceTimeline = ({ history, debtItems }) => {
+  const byDate = {};
+  history.forEach(h => {
+    if (!byDate[h.dateStr]) byDate[h.dateStr] = [];
+    byDate[h.dateStr].push(h);
+  });
+  const dates = Object.keys(byDate).reverse();
+  return (
+    <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid #dbeafe' }}>
+      <p style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:2, marginBottom:12 }}>
+        ประวัติการใช้บริการ
+      </p>
+      <div className="cs" style={{ maxHeight:280, overflowY:'auto', paddingRight:4 }}>
+        {dates.map(ds => {
+          const ents = byDate[ds];
+          const hasCourse   = ents.some(e => e.isCourse);
+          const hasDebtPay  = ents.some(e => e.isDebtPay);
+          const dotColor    = hasCourse ? '#3b82f6' : hasDebtPay ? '#22c55e' : '#cbd5e1';
+          return (
+            <div key={ds} style={{ display:'flex', gap:10, marginBottom:8 }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', minWidth:14 }}>
+                <div style={{ width:12, height:12, borderRadius:'50%', background:dotColor, border:'2px solid white', boxShadow:'0 1px 3px rgba(0,0,0,0.1)', flexShrink:0, marginTop:2 }} />
+                <div style={{ flex:1, width:1, background:'#e2e8f0', marginTop:4 }} />
+              </div>
+              <div style={{ flex:1, paddingBottom:8, minWidth:0 }}>
+                <p style={{ fontSize:9, fontWeight:900, color:'#64748b', marginBottom:4 }}>{ds}</p>
+                {ents.map((e, i) => (
+                  <div key={i} style={{
+                    display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8,
+                    padding:'6px 10px', borderRadius:10, marginBottom:3,
+                    background: e.isDebtPay ? '#f0fdf4' : e.isCourse ? '#eff6ff' : '#f8fafc',
+                    border: `1px solid ${e.isDebtPay ? '#bbf7d0' : e.isCourse ? '#bfdbfe' : '#e2e8f0'}`,
+                  }}>
+                    <div style={{ display:'flex', gap:6, alignItems:'flex-start', flex:1, minWidth:0 }}>
+                      <div style={{ width:6, height:6, borderRadius:'50%', background: TM[e.iType]?.dot || '#94a3b8', flexShrink:0, marginTop:4 }} />
+                      <div style={{ minWidth:0 }}>
+                        <p style={{ fontSize:10, fontWeight:700, color: e.isDebtPay ? '#15803d' : e.isCourse ? '#1d4ed8' : '#475569', lineHeight:1.3 }}>
+                          {e.item}
+                        </p>
+                        <div style={{ display:'flex', gap:4, marginTop:3, flexWrap:'wrap' }}>
+                          {e.isCourse && <span style={{ fontSize:8, background:'#2563eb', color:'white', padding:'1px 6px', borderRadius:20, fontWeight:900 }}>ตัดคอร์ส ×{e.qty}</span>}
+                          {e.isDebtPay && <span style={{ fontSize:8, background:'#16a34a', color:'white', padding:'1px 6px', borderRadius:20, fontWeight:900 }}>ชำระหนี้</span>}
+                          {!e.isCourse && !e.isDebtPay && e.qty > 0 && <span style={{ fontSize:9, color:'#94a3b8', fontWeight:700 }}>×{e.qty}</span>}
                         </div>
-
-                        {/* Stats Group 2: Unique Customer Cards */}
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-8">
-                            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[9px] font-black uppercase text-slate-400">ลูกค้าทั้งหมด</span>
-                                    <Icon name="users" size={14} className="text-slate-300" />
-                                </div>
-                                <h4 className="text-lg font-black text-slate-900">{filteredData.length} <span className="text-[9px] font-bold text-slate-400 uppercase">HN</span></h4>
-                            </div>
-                            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm border-t-4 border-t-blue-600">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[9px] font-black uppercase text-blue-600">ลูกค้า Mounjaro</span>
-                                    <Icon name="activity" size={14} className="text-blue-300" />
-                                </div>
-                                <h4 className="text-lg font-black text-slate-900">{stats.mounjaroUniqueCustomers} <span className="text-[9px] font-bold text-slate-400 uppercase">HN</span></h4>
-                            </div>
-                            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm border-t-4 border-t-emerald-500">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[9px] font-black uppercase text-emerald-500">ที่มีการซื้อ</span>
-                                    <Icon name="shopping" size={14} className="text-emerald-300" />
-                                </div>
-                                <h4 className="text-lg font-black text-slate-900">{stats.buyingCustomers} <span className="text-[9px] font-bold text-slate-400 uppercase">HN</span></h4>
-                            </div>
-                            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm border-t-4 border-t-purple-500">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[9px] font-black uppercase text-purple-500">ที่ฉีดจริง</span>
-                                    <Icon name="syringe" size={14} className="text-purple-300" />
-                                </div>
-                                <h4 className="text-lg font-black text-slate-900">{stats.injectionCustomers} <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">HN</span></h4>
-                            </div>
-                            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm border-t-4 border-t-blue-400">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[9px] font-black uppercase text-blue-400">ลูกค้าใหม่</span>
-                                    <Icon name="user" size={14} className="text-blue-200" />
-                                </div>
-                                <h4 className="text-lg font-black text-slate-900">{stats.newCount} <span className="text-[9px] font-bold text-slate-400 uppercase">HN</span></h4>
-                            </div>
-                            <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm border-t-4 border-t-slate-300">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className="text-[9px] font-black uppercase text-slate-400">ลูกค้าเก่า</span>
-                                    <Icon name="user" size={14} className="text-slate-200" />
-                                </div>
-                                <h4 className="text-lg font-black text-slate-900">{stats.oldCount} <span className="text-[9px] font-bold text-slate-400 uppercase">HN</span></h4>
-                            </div>
-                        </div>
-
-                        {/* Filters */}
-                        <div className="bg-white rounded-[2rem] border border-slate-200 p-6 mb-8 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-sm">
-                            <div className="relative">
-                                <Icon name="calendar" className="absolute left-4 top-3.5 text-slate-400" size={16} />
-                                <input type="date" className="w-full bg-slate-50 px-12 py-3 rounded-xl outline-none text-sm font-bold border-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-blue-600 uppercase tracking-tighter leading-none">บริการล่าสุดเริ่มจาก</span>
-                            </div>
-                            <div className="relative">
-                                <Icon name="calendar" className="absolute left-4 top-3.5 text-slate-400" size={16} />
-                                <input type="date" className="w-full bg-slate-50 px-12 py-3 rounded-xl outline-none text-sm font-bold border-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-blue-600 uppercase tracking-tighter leading-none">ถึงวันที่</span>
-                            </div>
-                            <div className="relative">
-                                <Icon name="search" className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                                <input type="text" placeholder="ค้นชื่อ หรือ HN..." className="w-full bg-slate-50 pl-12 pr-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                                <span className="absolute -top-2 left-4 bg-white px-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter leading-none">ค้นหาข้อมูล</span>
-                            </div>
-                        </div>
-
-                        {error && (
-                            <div className="mb-8 p-4 bg-rose-50 border-l-4 border-rose-500 text-rose-700 flex items-center gap-3 rounded-r-xl">
-                                <Icon name="x" className="text-rose-500" />
-                                <p className="font-bold text-sm">{error}</p>
-                            </div>
-                        )}
-
-                        {/* Table */}
-                        <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
-                            <div className="overflow-x-auto custom-scrollbar">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-slate-50/80 text-[10px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-100">
-                                        <tr>
-                                            <th className="px-8 py-5">#</th>
-                                            <th className="px-8 py-5 sort-header" onClick={() => handleSort('name')}>
-                                                <div className="flex items-center">ลูกค้า (HN) {getSortIcon('name')}</div>
-                                            </th>
-                                            <th className="px-8 py-5 text-center sort-header" onClick={() => handleSort('customerStatus')}>
-                                                <div className="flex items-center justify-center">ประเภท {getSortIcon('customerStatus')}</div>
-                                            </th>
-                                            <th className="px-8 py-5 text-center sort-header" onClick={() => handleSort('mounjaroInjections')}>
-                                                <div className="flex items-center justify-center">ฉีด Mounjaro {getSortIcon('mounjaroInjections')}</div>
-                                            </th>
-                                            <th className="px-8 py-5 text-center sort-header" onClick={() => handleSort('lastDateObj')}>
-                                                <div className="flex items-center justify-center text-blue-600 font-black">บริการล่าสุด {getSortIcon('lastDateObj')}</div>
-                                            </th>
-                                            <th className="px-8 py-5">รายการสินค้าอื่น</th>
-                                            <th className="px-8 py-5 text-right sort-header" onClick={() => handleSort('totalPaid')}>
-                                                <div className="flex items-center justify-end">ยอดซื้อรวม {getSortIcon('totalPaid')}</div>
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {filteredData.length > 0 ? filteredData.map((row, i) => (
-                                            <tr key={row.hn} className="hover:bg-blue-50/40 transition-colors group">
-                                                <td className="px-8 py-6 text-slate-300 font-bold">{i+1}</td>
-                                                <td className="px-8 py-6">
-                                                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-tight">{row.name}</p>
-                                                    <p className="text-[10px] text-slate-400 font-bold tracking-tighter uppercase mt-0.5">HN: {row.hn}</p>
-                                                </td>
-                                                <td className="px-8 py-6 text-center">
-                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black border tracking-tighter ${
-                                                        row.customerStatus === 'ใหม่' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                                                    }`}>
-                                                        {row.customerStatus === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-8 py-6">
-                                                    <div className="flex flex-col items-center">
-                                                        <span className={`text-base font-black px-6 py-2 rounded-2xl mb-3 shadow-sm ${row.mounjaroInjections > 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-300'}`}>
-                                                            {row.mounjaroInjections} ครั้ง
-                                                        </span>
-                                                        {row.mounjaroDates && row.mounjaroDates.length > 0 && (
-                                                            <div className="flex flex-col gap-1.5 w-full max-w-[140px]">
-                                                                {row.mounjaroDates.map((d, idx) => (
-                                                                    <div key={idx} className="flex justify-between items-center text-[10px] text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 font-bold">
-                                                                        <span>{d.dateStr}</span>
-                                                                        <span className="bg-blue-600 text-white px-1.5 rounded-full text-[8px]">{d.qty}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-6 text-center">
-                                                    <div className="bg-blue-50/50 p-2 rounded-xl border border-blue-100/50 inline-block min-w-[100px]">
-                                                        <p className="text-sm font-black text-blue-700">{row.lastDateObj.toLocaleDateString('th-TH')}</p>
-                                                        <p className="text-[9px] text-blue-400 font-bold uppercase tracking-tighter italic leading-none mt-1">LATEST SERVICE</p>
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-6">
-                                                    <div className="flex flex-wrap gap-1 max-w-[180px]">
-                                                        {row.items.map((it, idx) => (
-                                                            <span key={idx} className={`text-[9px] px-2 py-0.5 rounded-lg border leading-relaxed ${
-                                                                it.includes('[ตัดคอร์ส]') ? 'bg-blue-100 text-blue-700 border-blue-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-100'
-                                                            }`}>
-                                                                {it}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-6 text-right">
-                                                    <p className="text-xl font-black text-slate-900 tracking-tighter leading-none">{row.totalPaid.toLocaleString()}</p>
-                                                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{row.count} ITEMS</p>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr>
-                                                <td colSpan="7" className="py-32 text-center opacity-30 font-bold italic">ไม่พบข้อมูล... กรุณาอัปโหลดไฟล์</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                      </div>
                     </div>
-
-                    {/* Summary Modal */}
-                    {showSummaryModal && (
-                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 relative" style={{animation: 'fadeIn 0.2s ease-out'}}>
-                                <button onClick={() => setShowSummaryModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-full transition-colors">
-                                    <Icon name="x" size={20} />
-                                </button>
-                                
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
-                                        <Icon name="pieChart" size={24} />
-                                    </div>
-                                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">สรุปข้อมูล <span className="text-indigo-600">Mounjaro</span></h2>
-                                </div>
-                                
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ลูกค้าทั้งหมด</span>
-                                        <span className="text-lg font-black text-slate-900">{filteredData.length} <span className="text-xs text-slate-400 font-bold">คน</span></span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ลูกค้า Mounjaro</span>
-                                        <span className="text-lg font-black text-blue-600">{stats.mounjaroUniqueCustomers} <span className="text-xs text-slate-400 font-bold">คน</span></span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ที่มีการซื้อ Mounjaro</span>
-                                        <span className="text-lg font-black text-emerald-600">{stats.mounjaroBuyingCustomers} <span className="text-xs text-slate-400 font-bold">คน</span></span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ที่เข้ามาฉีดจริง</span>
-                                        <span className="text-lg font-black text-purple-600">{stats.injectionCustomers} <span className="text-xs text-slate-400 font-bold">คน</span></span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ฉีด Mounjaro ทั้งหมด</span>
-                                        <span className="text-lg font-black text-blue-600">{stats.mounjaroInjections} <span className="text-xs text-slate-400 font-bold">ครั้ง</span></span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ลูกค้าใหม่</span>
-                                        <span className="text-lg font-black text-blue-400">{stats.newCount} <span className="text-xs text-slate-400 font-bold">คน</span></span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                                        <span className="text-slate-500 font-bold">ลูกค้าเก่า</span>
-                                        <span className="text-lg font-black text-slate-400">{stats.oldCount} <span className="text-xs text-slate-300 font-bold">คน</span></span>
-                                    </div>
-                                    
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100 bg-emerald-50/50 px-3 rounded-lg mt-2">
-                                        <span className="text-emerald-700 font-bold">ยอดขาย Mounjaro</span>
-                                        <span className="text-xl font-black text-emerald-600">฿{stats.mounjaroRevenue.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-100 bg-slate-100 px-3 rounded-lg mt-2">
-                                        <span className="text-slate-700 font-bold">ยอดขายรวมทั้งหมด</span>
-                                        <span className="text-xl font-black text-slate-900">฿{stats.revenue.toLocaleString()}</span>
-                                    </div>
-                                    
-                                    <div className="pt-4 mt-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                        <h3 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-2">
-                                            <Icon name="syringe" size={16} className="text-blue-600" />
-                                            ลูกค้าฉีดกี่ครั้งมีกี่คน (เฉพาะผู้ที่ฉีดจริง)
-                                        </h3>
-                                        {Object.keys(stats.injectionBreakdown).length > 0 ? (
-                                            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                                                {Object.entries(stats.injectionBreakdown)
-                                                    .sort((a, b) => Number(a[0]) - Number(b[0]))
-                                                    .map(([times, count]) => (
-                                                    <div key={times} className="bg-white p-2.5 rounded-xl flex justify-between items-center border border-slate-100 shadow-sm">
-                                                        <span className="text-[12px] font-bold text-slate-600">ฉีด <span className="text-blue-600 font-black">{times}</span> ครั้ง</span>
-                                                        <span className="text-sm font-black text-slate-900">{count} <span className="text-[10px] text-slate-400">คน</span></span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-xs text-slate-400 text-center py-2 font-bold italic">ยังไม่มีข้อมูลการฉีด</p>
-                                        )}
-                                    </div>
-                                    
-                                    <button 
-                                        onClick={handleCopySummary}
-                                        className={`w-full mt-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
-                                            copySuccess 
-                                            ? 'bg-emerald-100 text-emerald-700' 
-                                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                                        }`}
-                                    >
-                                        {copySuccess ? (
-                                            <><Icon name="check" size={18} /> คัดลอกสำเร็จ!</>
-                                        ) : (
-                                            <><Icon name="copy" size={18} /> คัดลอกข้อความ (นำไปวางใน Word ได้เลย)</>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                    {e.paid > 0 && (
+                      <span style={{ fontSize:10, fontWeight:900, flexShrink:0, color: e.isDebtPay ? '#16a34a' : '#1e293b' }}>
+                        {e.paid.toLocaleString()}฿
+                      </span>
                     )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {debtItems && debtItems.length > 0 && (
+          <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid #fecdd3' }}>
+            <p style={{ fontSize:9, fontWeight:900, color:'#f43f5e', textTransform:'uppercase', marginBottom:6 }}>⚠ ยอดหนี้คงค้าง</p>
+            {debtItems.map((d, i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 10px', borderRadius:10, background:'#fff1f2', border:'1px solid #fecdd3', marginBottom:4 }}>
+                <div>
+                  <p style={{ fontSize:10, fontWeight:700, color:'#be123c' }}>{d.item}</p>
+                  <span style={{ fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:20, background: d.overdue ? '#fee2e2' : '#fef9c3', color: d.overdue ? '#dc2626' : '#a16207' }}>{d.status}</span>
                 </div>
-            );
-        };
+                <span style={{ fontSize:11, fontWeight:900, color:'#e11d48' }}>{d.amount.toLocaleString()}฿</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+/* ── Customer Row ── */
+const CRow = ({ row, i }) => {
+  const [exp, setExp] = useState(false);
+  return (
+    <>
+      <tr style={{ borderLeft: row.debtAmount > 0 ? '4px solid #fda4af' : '4px solid transparent' }}
+          className={`group transition-colors ${exp ? 'bg-blue-50/30' : 'hover:bg-slate-50/60'}`}>
+        <td className="px-5 py-4 text-slate-300 font-bold text-sm">{i + 1}</td>
+        <td className="px-5 py-4">
+          <p className="font-bold text-slate-900 leading-tight">{row.name}</p>
+          <p className="text-xs text-slate-400 font-bold uppercase">HN: {row.hn}</p>
+          {row.phone !== '-' && <p className="text-xs text-slate-400">{row.phone}</p>}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:3, marginTop:5 }}>
+            {(row.itemTypesUsed || []).map(t => (
+              <span key={t} className={`${TM[t]?.cls || 'bo'} text-xs px-2 py-0.5 rounded-full font-bold`} style={{ fontSize:9 }}>
+                {TM[t]?.label || t}
+              </span>
+            ))}
+          </div>
+        </td>
+        <td className="px-5 py-4 text-center">
+          <span className={`px-2.5 py-1 rounded-full font-black border ${row.customerStatus === 'ใหม่' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`} style={{ fontSize:9 }}>
+            {row.customerStatus === 'ใหม่' ? 'ใหม่' : 'เก่า'}
+          </span>
+        </td>
+        <td className="px-5 py-4">
+          <div style={{ minWidth:140 }}>
+            {row.mounjaroInj > 0 && (
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                <span className="bm" style={{ fontSize:8, padding:'1px 7px', borderRadius:20, fontWeight:900 }}>Mounjaro</span>
+                <span style={{ fontSize:10, fontWeight:900, color:'#1d4ed8' }}>{row.mounjaroInj} ครั้ง</span>
+              </div>
+            )}
+            {row.peptideInj > 0 && (
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                <span className="bp" style={{ fontSize:8, padding:'1px 7px', borderRadius:20, fontWeight:900 }}>PEPTIDE</span>
+                <span style={{ fontSize:10, fontWeight:900, color:'#15803d' }}>{row.peptideInj} ครั้ง</span>
+              </div>
+            )}
+            {row.pakaInj > 0 && (
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <span className="bk" style={{ fontSize:8, padding:'1px 7px', borderRadius:20, fontWeight:900 }}>ปากกา</span>
+                <span style={{ fontSize:10, fontWeight:900, color:'#9333ea' }}>{row.pakaInj} ครั้ง</span>
+              </div>
+            )}
+            {row.mounjaroInj === 0 && row.peptideInj === 0 && row.pakaInj === 0 && (
+              <span style={{ fontSize:9, color:'#cbd5e1', fontWeight:700 }}>ซื้อ / ยังไม่ฉีด</span>
+            )}
+          </div>
+        </td>
+        <td className="px-5 py-4 text-center">
+          <div style={{ background:'#eff6ff', padding:'6px 12px', borderRadius:12, display:'inline-block', border:'1px solid #bfdbfe' }}>
+            <p style={{ fontSize:13, fontWeight:900, color:'#1d4ed8' }}>{fmt(row.lastDate)}</p>
+            <p style={{ fontSize:7, color:'#93c5fd', fontWeight:700, textTransform:'uppercase' }}>latest</p>
+          </div>
+        </td>
+        <td className="px-5 py-4 text-right">
+          <p style={{ fontSize:15, fontWeight:900, color:'#0f172a' }}>{row.totalPaid.toLocaleString()}</p>
+          {row.debtPaid > 0 && <p style={{ fontSize:9, color:'#16a34a', fontWeight:700 }}>+{row.debtPaid.toLocaleString()} ชำระหนี้</p>}
+        </td>
+        <td className="px-5 py-4 text-right">
+          {row.debtAmount > 0
+            ? <p style={{ fontSize:15, fontWeight:900, color:'#e11d48' }}>{row.debtAmount.toLocaleString()}</p>
+            : <span style={{ color:'#e2e8f0', fontWeight:700 }}>—</span>}
+        </td>
+        <td className="px-5 py-4 text-right">
+          <p style={{ fontSize:15, fontWeight:900, color: row.netAmount >= 0 ? '#16a34a' : '#ea580c' }}>
+            {row.netAmount.toLocaleString()}
+          </p>
+        </td>
+        <td className="px-4 py-4 text-center">
+          <button onClick={() => setExp(v => !v)}
+            style={{
+              padding:'5px 10px', borderRadius:10, fontSize:10, fontWeight:700,
+              display:'flex', alignItems:'center', gap:4, margin:'0 auto', cursor:'pointer',
+              background: exp ? '#2563eb' : '#f1f5f9',
+              color: exp ? 'white' : '#64748b',
+              border:'none',
+            }}>
+            <Ic n="hist" s={12} />{exp ? 'ซ่อน' : 'ดู'}
+          </button>
+        </td>
+      </tr>
+      {exp && (
+        <tr style={{ background:'#f8fafc' }}>
+          <td colSpan="9" style={{ padding:'0 40px 20px' }}>
+            <div className="slide-down">
+              <ServiceTimeline history={row.serviceHistory || []} debtItems={row.debtItems || []} />
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+};
+
+/* ── Main App ── */
+const App = () => {
+  const [salesData,  setSalesData]  = useState(null);
+  const [debtData,   setDebtData]   = useState(null);
+  const [sFile,      setSFile]      = useState('');
+  const [dFile,      setDFile]      = useState('');
+  const [sErr,       setSErr]       = useState(null);
+  const [dErr,       setDErr]       = useState(null);
+  const [search,     setSearch]     = useState('');
+  const [startD,     setStartD]     = useState('');
+  const [endD,       setEndD]       = useState('');
+  const [srtK,       setSrtK]       = useState('lastDate');
+  const [srtD,       setSrtD]       = useState('desc');
+  const [modal,      setModal]      = useState(false);
+  const [copyOk,     setCopyOk]     = useState(false);
+  const [debtOnly,   setDebtOnly]   = useState(false);
+  const [tFilter,    setTFilter]    = useState('all');
+  const [imgModal,   setImgModal]   = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const [exporting,  setExporting]  = useState(false);
+  const imgRef = useRef(null);
+
+  const readX = (file, cb) => {
+    const r = new FileReader();
+    r.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type:'binary' });
+        cb(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1 }));
+      } catch { cb(null); }
+    };
+    r.readAsBinaryString(file);
+  };
+
+  const handleSales = (file) => {
+    setSFile(file.name); setSErr(null);
+    readX(file, rows => {
+      if (!rows || rows.length < 2) { setSErr('ไม่พบข้อมูลในไฟล์รายการขาย'); return; }
+      try { setSalesData(parseSales(rows)); } catch (e) { setSErr('รูปแบบไฟล์รายการขายไม่ถูกต้อง'); }
+    });
+  };
+
+  const handleDebt = (file) => {
+    setDFile(file.name); setDErr(null);
+    readX(file, rows => {
+      if (!rows || rows.length < 2) { setDErr('ไม่พบข้อมูลในไฟล์หนี้'); return; }
+      try { setDebtData(parseDebt(rows)); } catch (e) { setDErr('รูปแบบไฟล์หนี้ไม่ถูกต้อง'); }
+    });
+  };
+
+  const merged = useMemo(() => {
+    const all = new Set([...Object.keys(salesData || {}), ...Object.keys(debtData || {})]);
+    const res = [];
+    all.forEach(hn => {
+      const s = salesData?.[hn];
+      const d = debtData?.[hn];
+      const debtAmt  = d ? d.totalDebt : 0;
+      const totalPaid = s ? s.totalPaid : 0;
+      const debtPaid  = s ? s.debtPaid  : 0;
+      const net = totalPaid + debtPaid - debtAmt;
+      if (s) {
+        res.push({ ...s, debtAmount: debtAmt, debtItems: d ? d.items : [], netAmount: net });
+      } else if (d) {
+        res.push({
+          hn, name: d.name, phone: d.phone, regDate: new Date(0),
+          lastDate: d.items[0]?.date || new Date(0),
+          totalPaid: 0, debtPaid: 0, mounjaroInj: 0, mounjaroPaid: 0,
+          mounjaroDates: [], peptideInj: 0, pakaInj: 0,
+          hasMounjaro: false, hasPeptide: false, hasPaka: false,
+          serviceHistory: [], itemTypesUsed: ['other'],
+          debtAmount: debtAmt, debtItems: d.items, netAmount: -debtAmt,
+        });
+      }
+    });
+    return res;
+  }, [salesData, debtData]);
+
+  const filtered = useMemo(() => {
+    const s = startD ? new Date(startD) : null;
+    const e = endD   ? new Date(endD)   : null;
+    if (s) s.setHours(0, 0, 0, 0);
+    if (e) e.setHours(23, 59, 59, 999);
+    let list = merged.filter(item => {
+      if (debtOnly && item.debtAmount === 0) return false;
+      if (tFilter === 'mounjaro' && !item.hasMounjaro) return false;
+      if (tFilter === 'peptide'  && !item.hasPeptide)  return false;
+      if (tFilter === 'paka'     && !item.hasPaka)     return false;
+      const ms = item.name.toLowerCase().includes(search.toLowerCase()) || item.hn.includes(search);
+      let md = true;
+      if (s) md = md && item.lastDate >= s;
+      if (e) md = md && item.lastDate <= e;
+      return ms && md;
+    });
+    list = list.map(item => {
+      let status = 'เก่า';
+      if (s) { const ee = e || new Date(); if (item.regDate >= s && item.regDate <= ee) status = 'ใหม่'; }
+      return { ...item, customerStatus: status };
+    });
+    list.sort((a, b) => {
+      const vA = a[srtK], vB = b[srtK];
+      if (typeof vA === 'string') return srtD === 'asc' ? vA.localeCompare(vB, 'th') : vB.localeCompare(vA, 'th');
+      if (vA < vB) return srtD === 'asc' ? -1 : 1;
+      if (vA > vB) return srtD === 'asc' ?  1 : -1;
+      return 0;
+    });
+    return list;
+  }, [merged, search, startD, endD, srtK, srtD, debtOnly, tFilter]);
+
+  const stats = useMemo(() =>
+    filtered.reduce((a, c) => {
+      a.rev   += c.totalPaid;
+      a.debt  += c.debtAmount;
+      a.net   += c.netAmount;
+      a.mjInj += c.mounjaroInj;
+      a.mjRev += c.mounjaroPaid;
+      if (c.customerStatus === 'ใหม่') a.newC++; else a.oldC++;
+      if (c.debtAmount  > 0) a.debtC++;
+      if (c.hasMounjaro)     a.mjC++;
+      if (c.hasPeptide)      a.pepC++;
+      if (c.hasPaka)         a.pakaC++;
+      if (c.mounjaroInj > 0) {
+        a.injC++;
+        a.injBD[c.mounjaroInj] = (a.injBD[c.mounjaroInj] || 0) + 1;
+      }
+      return a;
+    }, { rev:0, debt:0, net:0, mjInj:0, mjRev:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
+  [filtered]);
+
+  const doSort = (k) => { if (srtK === k) { setSrtD(d => d === 'desc' ? 'asc' : 'desc'); } else { setSrtK(k); setSrtD('desc'); } };
+  const si = (k) => {
+    if (srtK !== k) return <Ic n="aUD" s={11} c="text-slate-300 ml-1 opacity-40" />;
+    return srtD === 'asc' ? <Ic n="aUp" s={11} c="text-blue-600 ml-1" /> : <Ic n="aDn" s={11} c="text-blue-600 ml-1" />;
+  };
+
+  const reset = () => {
+    setSalesData(null); setDebtData(null); setSFile(''); setDFile('');
+    setSErr(null); setDErr(null); setSearch(''); setStartD(''); setEndD('');
+    setSrtK('lastDate'); setSrtD('desc'); setDebtOnly(false); setTFilter('all');
+  };
+
+  const doExportXLSX = () => {
+    if (!filtered.length) return;
+    const rows = filtered.map((c, i) => ({
+      'ลำดับ': i+1, 'HN': c.hn, 'ชื่อ-สกุล': c.name, 'เบอร์โทร': c.phone || '-',
+      'ประเภทลูกค้า': c.customerStatus === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า',
+      'บริการที่ใช้': (c.itemTypesUsed || []).map(t => TM[t]?.label || t).join(', '),
+      'ฉีด Mounjaro': c.mounjaroInj, 'ฉีด PEPTIDE': c.peptideInj, 'ฉีด ปากกา': c.pakaInj,
+      'ยอดซื้อรวม': c.totalPaid, 'ยอดชำระหนี้': c.debtPaid,
+      'ยอดหนี้คงค้าง': c.debtAmount, 'ยอดสุทธิ': c.netAmount,
+      'บริการล่าสุด': fmt(c.lastDate),
+      'ประวัติฉีด Mounjaro': c.mounjaroDates.map(d => `${d.dateStr}(${d.qty})`).join(', '),
+      'รายการหนี้': c.debtItems.map(d => `${d.item}(${d.amount.toLocaleString()}฿)`).join(' | '),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Report');
+    XLSX.writeFile(wb, `Mounjaro_Debt_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const doExportImage = async () => {
+    if (!imgRef.current) return;
+    setExporting(true);
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      const canvas = await html2canvas(imgRef.current, {
+        scale: 2.5, useCORS: true, backgroundColor: null, logging: false,
+      });
+      const link = document.createElement('a');
+      const dateStr = new Date().toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g, '-');
+      const branch = branchName.trim() || 'สาขา';
+      link.download = `สรุปรายงาน_${branch}_${dateStr}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) { alert('Export ไม่สำเร็จ: ' + e.message); }
+    setExporting(false);
+  };
+
+  const doCopy = () => {
+    let t = `สรุปข้อมูล Mounjaro + หนี้\n=============================\n`;
+    t += `ลูกค้าทั้งหมด:\t${filtered.length} คน\n`;
+    t += `ลูกค้า Mounjaro:\t${stats.mjC} คน\nลูกค้า PEPTIDE:\t${stats.pepC} คน\nลูกค้าปากกา:\t${stats.pakaC} คน\n`;
+    t += `ฉีด Mounjaro:\t${stats.mjInj} ครั้ง\nลูกค้าใหม่:\t${stats.newC} คน\nลูกค้าเก่า:\t${stats.oldC} คน\n`;
+    t += `-----------------------------\n`;
+    t += `ยอดขาย Mounjaro:\t฿${stats.mjRev.toLocaleString()}\n`;
+    t += `ยอดขายรวมทั้งหมดรวม BL:\t฿${(stats.rev + stats.debt).toLocaleString()}\n`;
+    t += `ยอดชำระหน้าร้าน:\t฿${stats.rev.toLocaleString()}\n`;
+    t += `ยอด BL:\t฿${stats.debt.toLocaleString()}\n`;
+    t += `ลูกค้ามีหนี้:\t${stats.debtC} คน\n-----------------------------\n`;
+    Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).forEach(([n, c]) => { t += `ฉีด ${n} ครั้ง: ${c} คน\n`; });
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000); } catch {}
+    document.body.removeChild(ta);
+  };
+
+  const ready = salesData || debtData;
+
+  return (
+    <div style={{ minHeight:'100vh', paddingBottom:80 }}>
+      <div style={{ maxWidth:1280, margin:'0 auto', padding:'32px 16px' }}>
+
+        {/* ── Header ── */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', gap:20, marginBottom:32, flexWrap:'wrap' }}>
+          <div>
+            <h1 style={{ fontSize:36, fontWeight:900, color:'#0f172a', margin:0, lineHeight:1 }}>
+              Injection <span style={{ color:'#2563eb' }}>History</span>
+              <span style={{ color:'#f43f5e' }}> + Debt</span>
+            </h1>
+            <p style={{ color:'#94a3b8', marginTop:6, fontStyle:'italic', fontSize:13 }}>
+              ระบบวิเคราะห์ Mounjaro · PEPTIDE · ปากกา พร้อมยอดหนี้และประวัติรายการ
+            </p>
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+            <button onClick={reset} className="flex items-center gap-1.5 bg-white border border-red-100 text-red-500 px-4 py-2.5 rounded-2xl font-bold hover:bg-red-50 text-sm transition-all">
+              <Ic n="refresh" s={14} />รีเฟรช
+            </button>
+            <button onClick={() => setModal(true)} disabled={!ready} className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2.5 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-40 text-sm transition-all">
+              <Ic n="pie" s={14} />สรุปข้อมูล
+            </button>
+            <button onClick={() => setImgModal(true)} disabled={!ready} className="flex items-center gap-1.5 bg-violet-600 text-white px-4 py-2.5 rounded-2xl font-bold hover:bg-violet-700 disabled:opacity-40 text-sm transition-all">
+              <Ic n="img" s={14} />Export รูป
+            </button>
+            <button onClick={doExportXLSX} disabled={!ready} className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2.5 rounded-2xl font-bold hover:bg-emerald-700 disabled:opacity-40 text-sm transition-all">
+              <Ic n="dl" s={14} />Export XLSX
+            </button>
+          </div>
+        </div>
+
+        {/* ── Upload ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:28 }}>
+          <UpZone label="① ไฟล์รายการขาย (Sales)" sub="คอลัมน์: HN · รายการ · ยอดชำระ · ประเภทชำระ" done={!!salesData} fname={sFile} onFile={handleSales} />
+          <UpZone label="② ไฟล์ยอดหนี้ (Debtors)"  sub="อัปโหลดไฟล์หนี้ของ Florenza Clinic"  done={!!debtData}  fname={dFile} onFile={handleDebt} />
+        </div>
+
+        {/* Errors */}
+        {(sErr || dErr) && (
+          <div style={{ marginBottom:20 }}>
+            {sErr && <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-r-xl text-sm font-bold flex items-center gap-2 mb-2"><Ic n="alert" s={14} />{sErr}</div>}
+            {dErr && <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-r-xl text-sm font-bold flex items-center gap-2"><Ic n="alert" s={14} />{dErr}</div>}
+          </div>
+        )}
+
+        {/* ── Stats money ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:16 }}>
+          {[
+            { label:'ยอดขายรวมทั้งหมดรวม BL', val:`${(stats.rev + stats.debt).toLocaleString()} ฿`, sub:null,                  bg:'#eff6ff', ic:'dollar', icbg:'#dbeafe', icc:'#2563eb', vc:'#0f172a' },
+            { label:'ยอดชำระหน้าร้าน',         val:`${stats.rev.toLocaleString()} ฿`, sub:null, bg:'#f0fdf4', ic:'dollar',  icbg:'#dcfce7', icc:'#16a34a', vc:'#16a34a' },
+            { label:'ยอด BL',               val:`${stats.debt.toLocaleString()} ฿`, sub:`${stats.debtC} คนที่มีหนี้`, bg:'#fff1f2', ic:'alert',  icbg:'#ffe4e6', icc:'#e11d48', vc:'#e11d48' },
+          ].map(({ label, val, sub, bg, ic, icbg, icc, vc }) => (
+            <div key={label} style={{ background:'white', padding:20, borderRadius:28, border:'1px solid #f1f5f9', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:16 }}>
+              <div style={{ padding:12, background:icbg, borderRadius:16, color:icc, flexShrink:0 }}><Ic n={ic} s={26} /></div>
+              <div>
+                <span style={{ fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color:'#94a3b8', display:'block' }}>{label}</span>
+                <h3 style={{ fontSize:22, fontWeight:900, color:vc, margin:0 }}>{val}</h3>
+                {sub && <p style={{ fontSize:9, color:'#f87171', fontWeight:700, margin:0 }}>{sub}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Stats customers ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, marginBottom:24 }}>
+          {[
+            { l:'ลูกค้าทั้งหมด', v:filtered.length, c:'#94a3b8' },
+            { l:'Mounjaro',       v:stats.mjC,        c:'#3b82f6' },
+            { l:'PEPTIDE',        v:stats.pepC,        c:'#22c55e' },
+            { l:'ปากกา',          v:stats.pakaC,       c:'#a855f7' },
+            { l:'ลูกค้าใหม่',    v:stats.newC,        c:'#0ea5e9' },
+            { l:'ลูกค้าเก่า',    v:stats.oldC,        c:'#94a3b8' },
+          ].map(({ l, v, c }) => (
+            <div key={l} style={{ background:'white', padding:'14px 16px', borderRadius:24, border:'1px solid #f1f5f9', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', borderTop:`4px solid ${c}` }}>
+              <span style={{ fontSize:8, fontWeight:900, textTransform:'uppercase', color:c, display:'block', marginBottom:4 }}>{l}</span>
+              <p style={{ fontSize:20, fontWeight:900, color:'#0f172a', margin:0 }}>{v} <span style={{ fontSize:8, color:'#94a3b8' }}>คน</span></p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Filters ── */}
+        <div style={{ background:'white', borderRadius:28, border:'1px solid #e2e8f0', padding:20, marginBottom:24, boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12, marginBottom:12 }}>
+            {[
+              { label:'เริ่มจาก', val:startD, set:setStartD },
+              { label:'ถึงวันที่', val:endD,   set:setEndD },
+            ].map(({ label, val, set }) => (
+              <div key={label} style={{ position:'relative' }}>
+                <Ic n="cal" c="absolute left-3 top-3.5 text-slate-400" s={13} />
+                <input type="date" value={val} onChange={e => set(e.target.value)}
+                  style={{ width:'100%', background:'#f8fafc', padding:'12px 12px 12px 36px', borderRadius:12, border:'none', fontSize:13, fontWeight:700, outline:'none' }} />
+                <span style={{ position:'absolute', top:-8, left:12, background:'white', padding:'0 4px', fontSize:8, fontWeight:900, color:'#2563eb', textTransform:'uppercase' }}>{label}</span>
+              </div>
+            ))}
+            <div style={{ position:'relative' }}>
+              <Ic n="srch" c="absolute left-3 top-3.5 text-slate-400" s={14} />
+              <input type="text" placeholder="ค้นชื่อหรือ HN..." value={search} onChange={e => setSearch(e.target.value)}
+                style={{ width:'100%', background:'#f8fafc', padding:'12px 12px 12px 38px', borderRadius:12, border:'none', fontSize:13, fontWeight:700, outline:'none' }} />
+              <span style={{ position:'absolute', top:-8, left:12, background:'white', padding:'0 4px', fontSize:8, fontWeight:900, color:'#94a3b8', textTransform:'uppercase' }}>ค้นหา</span>
+            </div>
+            <button onClick={() => setDebtOnly(v => !v)}
+              style={{ padding:'12px', borderRadius:12, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', gap:6, border:`1px solid ${debtOnly ? '#e11d48' : '#fecdd3'}`, background: debtOnly ? '#e11d48' : 'white', color: debtOnly ? 'white' : '#e11d48', cursor:'pointer' }}>
+              <Ic n="alert" s={14} />{debtOnly ? '✓ เฉพาะมีหนี้' : 'เฉพาะมีหนี้'}
+            </button>
+          </div>
+          <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+            <span style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', display:'flex', alignItems:'center', gap:4 }}>
+              <Ic n="tag" s={10} />กรองบริการ:
+            </span>
+            {[{ v:'all', l:'ทั้งหมด' }, { v:'mounjaro', l:'Mounjaro' }, { v:'peptide', l:'PEPTIDE' }, { v:'paka', l:'ปากกา' }].map(f => (
+              <button key={f.v} onClick={() => setTFilter(f.v)}
+                style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:700, border:`1px solid ${tFilter === f.v ? '#2563eb' : '#e2e8f0'}`, background: tFilter === f.v ? '#2563eb' : 'white', color: tFilter === f.v ? 'white' : '#475569', cursor:'pointer' }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Table ── */}
+        <div style={{ background:'white', borderRadius:32, boxShadow:'0 4px 20px rgba(0,0,0,0.08)', border:'1px solid #f1f5f9', overflow:'hidden' }}>
+          <div className="cs" style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', textAlign:'left' }}>
+              <thead style={{ background:'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
+                <tr>
+                  {[
+                    { k:'',            label:'#',                    align:'left'  },
+                    { k:'name',        label:'ลูกค้า + บริการที่ใช้', align:'left'  },
+                    { k:'customerStatus', label:'ประเภท',           align:'center' },
+                    { k:'mounjaroInj', label:'สรุปบริการ',           align:'left'  },
+                    { k:'lastDate',    label:'บริการล่าสุด',          align:'center', blue:true },
+                    { k:'totalPaid',   label:'ยอดซื้อ',              align:'right' },
+                    { k:'debtAmount',  label:'ยอดหนี้',              align:'right', red:true },
+                    { k:'netAmount',   label:'ยอดสุทธิ',             align:'right', green:true },
+                    { k:'',            label:'ประวัติ',              align:'center' },
+                  ].map(({ k, label, align, blue, red, green }, i) => (
+                    <th key={i} className={k ? 'sh' : ''} onClick={() => k && doSort(k)}
+                      style={{ padding:'16px 20px', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color: blue ? '#2563eb' : red ? '#e11d48' : green ? '#16a34a' : '#94a3b8', textAlign: align }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start' }}>
+                        {label}{k && si(k)}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length > 0
+                  ? filtered.map((row, i) => <CRow key={row.hn} row={row} i={i} />)
+                  : (
+                    <tr>
+                      <td colSpan="9" style={{ padding:'100px 0', textAlign:'center', color:'#cbd5e1', fontWeight:700, fontStyle:'italic' }}>
+                        {ready ? 'ไม่พบข้อมูลตามเงื่อนไข' : 'กรุณาอัปโหลดไฟล์ Sales และ/หรือ Debt'}
+                      </td>
+                    </tr>
+                  )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Summary Modal ── */}
+      {modal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
+          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:440, padding:24, position:'relative', maxHeight:'90vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
+            <button onClick={() => setModal(false)} style={{ position:'absolute', top:16, right:16, background:'#f8fafc', border:'none', borderRadius:'50%', padding:8, cursor:'pointer', color:'#94a3b8' }}>
+              <Ic n="x" s={18} />
+            </button>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+              <div style={{ padding:12, background:'#eef2ff', borderRadius:16, color:'#6366f1' }}><Ic n="pie" s={22} /></div>
+              <h2 style={{ fontSize:20, fontWeight:900, margin:0 }}>สรุปข้อมูล</h2>
+            </div>
+            <div>
+              {[
+                ['ลูกค้าทั้งหมด',       `${filtered.length} คน`, '#0f172a'],
+                ['ลูกค้า Mounjaro',     `${stats.mjC} คน`,        '#2563eb'],
+                ['ลูกค้า PEPTIDE',      `${stats.pepC} คน`,       '#16a34a'],
+                ['ลูกค้าปากกา',         `${stats.pakaC} คน`,      '#9333ea'],
+                ['ที่ฉีด Mounjaro จริง',`${stats.injC} คน`,       '#9333ea'],
+                ['ฉีด Mounjaro รวม',    `${stats.mjInj} ครั้ง`,   '#2563eb'],
+                ['ลูกค้าใหม่',          `${stats.newC} คน`,       '#0ea5e9'],
+                ['ลูกค้าเก่า',          `${stats.oldC} คน`,       '#94a3b8'],
+              ].map(([l, v, c]) => (
+                <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
+                  <span style={{ color:'#64748b', fontWeight:700, fontSize:14 }}>{l}</span>
+                  <span style={{ fontWeight:900, fontSize:16, color:c }}>{v}</span>
+                </div>
+              ))}
+              <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:8 }}>
+                {[
+                  ['ยอดขาย Mounjaro',         `฿${stats.mjRev.toLocaleString()}`, '#eff6ff', '#1d4ed8'],
+                  ['ยอดขายรวมทั้งหมดรวม BL',  `฿${(stats.rev + stats.debt).toLocaleString()}`,   '#f8fafc', '#0f172a'],
+                  ['ยอดชำระหน้าร้าน',         `฿${stats.rev.toLocaleString()}`,   '#f0fdf4', '#16a34a'],
+                  ['ยอด BL',                 `฿${stats.debt.toLocaleString()}`,  '#fff1f2', '#e11d48'],
+                ].map(([l, v, bg, vc]) => (
+                  <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderRadius:12, background:bg }}>
+                    <span style={{ fontWeight:700, fontSize:14 }}>{l}</span>
+                    <span style={{ fontSize:20, fontWeight:900, color:vc }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              {Object.keys(stats.injBD).length > 0 && (
+                <div style={{ background:'#f8fafc', borderRadius:20, padding:16, border:'1px solid #f1f5f9', marginTop:12 }}>
+                  <p style={{ fontSize:12, fontWeight:900, color:'#0f172a', marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+                    <Ic n="syringe" s={13} c="text-blue-600" />ฉีด Mounjaro กี่ครั้ง มีกี่คน
+                  </p>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                    {Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).map(([n, c]) => (
+                      <div key={n} style={{ background:'white', padding:'8px 12px', borderRadius:12, display:'flex', justifyContent:'space-between', border:'1px solid #f1f5f9' }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:'#475569' }}>ฉีด <span style={{ color:'#2563eb', fontWeight:900 }}>{n}</span> ครั้ง</span>
+                        <span style={{ fontSize:13, fontWeight:900 }}>{c} <span style={{ fontSize:9, color:'#94a3b8' }}>คน</span></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={doCopy} style={{
+                width:'100%', marginTop:12, padding:'12px', borderRadius:12, fontWeight:900, fontSize:13,
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', border:'none',
+                background: copyOk ? '#dcfce7' : '#eef2ff', color: copyOk ? '#16a34a' : '#6366f1',
+              }}>
+                {copyOk ? <><Ic n="check" s={15} />คัดลอกสำเร็จ!</> : <><Ic n="copy" s={15} />คัดลอกข้อความ</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Export Image Modal ── */}
+      {imgModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
+          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:520, position:'relative', maxHeight:'95vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
+            {/* Modal header */}
+            <div style={{ position:'sticky', top:0, background:'white', borderRadius:'28px 28px 0 0', padding:'20px 24px 16px', borderBottom:'1px solid #f1f5f9', zIndex:10 }}>
+              <button onClick={() => setImgModal(false)} style={{ position:'absolute', top:16, right:16, background:'#f8fafc', border:'none', borderRadius:'50%', padding:8, cursor:'pointer', color:'#94a3b8' }}>
+                <Ic n="x" s={18} />
+              </button>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ padding:12, background:'#f5f3ff', borderRadius:16, color:'#7c3aed' }}><Ic n="img" s={22} /></div>
+                <div>
+                  <h2 style={{ fontSize:20, fontWeight:900, margin:0 }}>Export สรุปรายงาน</h2>
+                  <p style={{ fontSize:11, color:'#94a3b8', fontWeight:700, margin:0 }}>บันทึกเป็นรูปภาพ PNG</p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:20 }}>
+              {/* ช่องชื่อสาขา */}
+              <div>
+                <label style={{ fontSize:11, fontWeight:900, color:'#475569', textTransform:'uppercase', letterSpacing:2, display:'block', marginBottom:8 }}>
+                  ชื่อสาขา / คลินิก
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น Florenza Clinic The Choc, สาขาเซ็นทรัล..."
+                  value={branchName}
+                  onChange={e => setBranchName(e.target.value)}
+                  style={{ width:'100%', background:'#f8fafc', padding:'12px 16px', borderRadius:16, border:'1px solid #e2e8f0', fontSize:14, fontWeight:700, outline:'none', boxSizing:'border-box' }}
+                  onFocus={e => e.target.style.borderColor = '#7c3aed'}
+                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                />
+              </div>
+
+              {/* Preview */}
+              <div>
+                <label style={{ fontSize:11, fontWeight:900, color:'#475569', textTransform:'uppercase', letterSpacing:2, display:'block', marginBottom:10 }}>
+                  Preview (ตัวอย่างรูปที่จะได้)
+                </label>
+                <div style={{ borderRadius:16, overflow:'hidden', boxShadow:'0 4px 20px rgba(0,0,0,0.15)' }}>
+                  <div ref={imgRef} style={{
+                    background:'linear-gradient(135deg,#1e3a5f 0%,#1d4ed8 45%,#0ea5e9 100%)',
+                    padding:24, fontFamily:'Sarabun,sans-serif',
+                  }}>
+                    {/* Card header */}
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+                      <div>
+                        <div style={{ color:'rgba(255,255,255,0.5)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, marginBottom:3 }}>
+                          INJECTION + DEBT REPORT
+                        </div>
+                        <div style={{ color:'white', fontSize:20, fontWeight:900, lineHeight:1.2 }}>
+                          {branchName.trim() || 'ชื่อสาขา / คลินิก'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:'right' }}>
+                        <div style={{ color:'rgba(255,255,255,0.5)', fontSize:9, fontWeight:700 }}>วันที่ออกรายงาน</div>
+                        <div style={{ color:'white', fontSize:12, fontWeight:900 }}>
+                          {new Date().toLocaleDateString('th-TH', { day:'2-digit', month:'long', year:'numeric' })}
+                        </div>
+                        {(startD || endD) && (
+                          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:9, fontWeight:700, marginTop:2 }}>
+                            {startD && fmt(new Date(startD))} {startD && endD && '–'} {endD && fmt(new Date(endD))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Money row */}
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:7, marginBottom:9 }}>
+                      {[
+                        { l:'ยอดขายรวมทั้งหมดรวม BL', v:`฿${(stats.rev + stats.debt).toLocaleString()}`,  bg:'rgba(255,255,255,0.15)', vc:'white' },
+                        { l:'ยอดชำระหน้าร้าน',        v:`฿${stats.rev.toLocaleString()}`, bg:'rgba(16,185,129,0.25)',   vc:'#6ee7b7' },
+                        { l:'ยอด BL',               v:`฿${stats.debt.toLocaleString()}`,  bg:'rgba(244,63,94,0.28)', vc:'#fda4af' },
+                      ].map(({ l, v, bg, vc }) => (
+                        <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 12px' }}>
+                          <div style={{ color:'rgba(255,255,255,0.5)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
+                          <div style={{ color:vc, fontSize:15, fontWeight:900 }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Customer grid */}
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:9 }}>
+                      {[
+                        { l:'ลูกค้าทั้งหมด', v:filtered.length },
+                        { l:'Mounjaro',       v:stats.mjC },
+                        { l:'PEPTIDE',        v:stats.pepC },
+                        { l:'ปากกาลดน้ำหนัก',v:stats.pakaC },
+                        { l:'ลูกค้าใหม่',    v:stats.newC },
+                        { l:'ลูกค้าเก่า',    v:stats.oldC },
+                      ].map(({ l, v }) => (
+                        <div key={l} style={{ background:'rgba(255,255,255,0.1)', borderRadius:10, padding:'8px 11px' }}>
+                          <div style={{ color:'rgba(255,255,255,0.5)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>{l}</div>
+                          <div style={{ color:'white', fontSize:18, fontWeight:900, marginTop:1 }}>
+                            {v} <span style={{ fontSize:8, opacity:0.6 }}>คน</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Mounjaro */}
+                    <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:12, padding:'11px 14px', marginBottom:9 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                        <span style={{ color:'rgba(255,255,255,0.65)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>💉 Mounjaro</span>
+                        <span style={{ color:'#93c5fd', fontSize:9, fontWeight:700 }}>฿{stats.mjRev.toLocaleString()}</span>
+                      </div>
+                      <div style={{ color:'white', fontSize:12, fontWeight:800 }}>
+                        ฉีดทั้งหมด <span style={{ fontSize:22, color:'#60a5fa', fontWeight:900 }}>{stats.mjInj}</span> ครั้ง
+                        <span style={{ color:'rgba(255,255,255,0.5)', fontSize:10, marginLeft:8 }}>
+                          · ที่ฉีดจริง {stats.injC} คน · มีหนี้ {stats.debtC} คน
+                        </span>
+                      </div>
+                    </div>
+                    {/* Breakdown */}
+                    {Object.keys(stats.injBD).length > 0 && (
+                      <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:10, padding:'9px 13px', marginBottom:9 }}>
+                        <div style={{ color:'rgba(255,255,255,0.4)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:5 }}>
+                          จำนวนครั้งที่ฉีด Mounjaro
+                        </div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                          {Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).map(([n, c]) => (
+                            <div key={n} style={{ background:'rgba(96,165,250,0.25)', borderRadius:7, padding:'3px 9px', color:'white', fontSize:11, fontWeight:900 }}>
+                              {n} ครั้ง <span style={{ color:'#93c5fd' }}>→ {c} คน</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Footer */}
+                    <div style={{ marginTop:12, borderTop:'1px solid rgba(255,255,255,0.12)', paddingTop:9, display:'flex', justifyContent:'space-between' }}>
+                      <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>INJECTION HISTORY + DEBT DASHBOARD</div>
+                      <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>ข้อมูล {filtered.length} HN</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Export button */}
+              <button onClick={doExportImage} disabled={exporting || !ready}
+                style={{
+                  width:'100%', padding:'14px', borderRadius:16, fontSize:14, fontWeight:900,
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: exporting ? 'not-allowed' : 'pointer', border:'none',
+                  background: exporting ? '#e2e8f0' : '#7c3aed', color: exporting ? '#94a3b8' : 'white',
+                  boxShadow: exporting ? 'none' : '0 4px 15px rgba(124,58,237,0.35)',
+                }}>
+                {exporting
+                  ? <><span style={{ display:'inline-block', width:16, height:16, border:'2px solid #94a3b8', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />กำลัง Export...</>
+                  : <><Ic n="img" s={16} />บันทึกเป็นรูปภาพ PNG</>}
+              </button>
+              <p style={{ textAlign:'center', fontSize:10, color:'#94a3b8', fontWeight:700, marginTop:-12 }}>
+                ชื่อไฟล์: สรุปรายงาน_{branchName.trim() || 'สาขา'}_{new Date().toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g, '-')}.png
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
 </body>
 </html>
