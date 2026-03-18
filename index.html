@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Mounjaro Dashboard v3.1</title>
+<title>Mounjaro Dashboard v3.2</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -92,11 +92,9 @@ const pDate = (v) => {
   if (!v) return new Date(0);
   if (typeof v === 'number') return new Date((v - 25569) * 86400 * 1000);
   const s = String(v).trim();
-  
   if (/^\d+(\.\d+)?$/.test(s)) {
     return new Date((parseFloat(s) - 25569) * 86400 * 1000);
   }
-
   const p = s.split('/');
   if (p.length === 3) {
     const [dd, mm, yy] = p;
@@ -188,24 +186,19 @@ const parseSales = (rows) => {
 const parseDebt = (rows) => {
   const H = rows[0].map(h => String(h || '').trim());
   const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
-  
   const idx = {
-    name:   fi(['ชื่อลูกค้า', 'ชื่อ-สกุล']), 
-    item:   fi(['รายการ']), 
-    date:   fi(['วันที่']), 
-    amount: fi(['คงเหลือ', 'ค้างชำระ']), 
+    name:   fi(['ชื่อลูกค้า', 'ชื่อ-สกุล']),
+    item:   fi(['รายการ']),
+    date:   fi(['วันที่']),
+    amount: fi(['คงเหลือ', 'ค้างชำระ']),
     status: fi(['สถานะ']),
   };
-
   const D = {};
   let curHN = null, curName = null, curPhone = null;
-
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || r.length === 0) continue;
-
     const colName = String(r[idx.name > -1 ? idx.name : 1] || '').trim();
-    
     if (colName && colName !== 'รวม' && colName.includes('/')) {
       const parts = colName.split('/');
       curName = parts[0].trim();
@@ -213,35 +206,28 @@ const parseDebt = (rows) => {
       curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
       continue;
     }
-
     if (!curHN) continue;
-
     const itemName = String(r[idx.item > -1 ? idx.item : 3] || '').trim();
     if (!itemName || itemName === 'รวม') continue;
-
     if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
-
     const amtCol = idx.amount > -1 ? idx.amount : (r.length - 1);
     const amtStr = String(r[amtCol] || '0').replace(/,/g, '');
     const amt = Math.abs(parseFloat(amtStr) || 0);
-    
     if (amt === 0) continue;
-
     const dCol = idx.date > -1 ? idx.date : 5;
     const date = pDate(r[dCol]);
     const statusStr = idx.status !== -1 ? String(r[idx.status] || '') : 'ค้างชำระ';
-
     if (!D[curHN]) {
       D[curHN] = { hn: curHN, name: curName, phone: curPhone, totalDebt: 0, items: [] };
     }
     D[curHN].totalDebt += amt;
-    D[curHN].items.push({ 
-      item: itemName, 
-      amount: amt, 
-      status: statusStr, 
-      date, 
-      dateStr: fmt(date), 
-      overdue: statusStr.includes('เกิน') 
+    D[curHN].items.push({
+      item: itemName,
+      amount: amt,
+      status: statusStr,
+      date,
+      dateStr: fmt(date),
+      overdue: statusStr.includes('เกิน')
     });
   }
   return D;
@@ -501,16 +487,24 @@ const App = () => {
     });
   };
 
+  /* ─────────────────────────────────────────────────────
+     BUG FIX: หัก debtPaid ออกจาก rawDebt ก่อน
+     เพื่อให้ debtAmount = ยอดหนี้คงเหลือจริง (ไม่ใช่ยอดหนี้เดิม)
+     net = totalPaid - debtAmount (ไม่บวก debtPaid ซ้ำ)
+  ───────────────────────────────────────────────────── */
   const merged = useMemo(() => {
     const all = new Set([...Object.keys(salesData || {}), ...Object.keys(debtData || {})]);
     const res = [];
     all.forEach(hn => {
       const s = salesData?.[hn];
       const d = debtData?.[hn];
-      const debtAmt  = d ? d.totalDebt : 0;
-      const totalPaid = s ? s.totalPaid : 0;
-      const debtPaid  = s ? s.debtPaid  : 0;
-      const net = totalPaid + debtPaid - debtAmt;
+      const totalPaid = s ? s.totalPaid  : 0;
+      const debtPaid  = s ? s.debtPaid   : 0;
+      const rawDebt   = d ? d.totalDebt  : 0;
+      // ยอดหนี้คงเหลือ = ยอดหนี้จากไฟล์ Debt - ที่ชำระแล้วในไฟล์ Sales
+      const debtAmt   = Math.max(0, rawDebt - debtPaid);
+      const net       = totalPaid - debtAmt;
+
       if (s) {
         res.push({ ...s, debtAmount: debtAmt, debtItems: d ? d.items : [], netAmount: net });
       } else if (d) {
@@ -599,7 +593,7 @@ const App = () => {
       'บริการที่ใช้': (c.itemTypesUsed || []).map(t => TM[t]?.label || t).join(', '),
       'ฉีด Mounjaro': c.mounjaroInj, 'ฉีด PEPTIDE': c.peptideInj, 'ฉีด ปากกา': c.pakaInj,
       'ยอดซื้อรวม': c.totalPaid, 'ยอดชำระหนี้': c.debtPaid,
-      'ยอดหนี้คงค้าง': c.debtAmount, 'ยอดสุทธิ': c.netAmount,
+      'ยอดหนี้คงเหลือ': c.debtAmount, 'ยอดสุทธิ': c.netAmount,
       'บริการล่าสุด': fmt(c.lastDate),
       'ประวัติฉีด Mounjaro': c.mounjaroDates.map(d => `${d.dateStr}(${d.qty})`).join(', '),
       'รายการหนี้': c.debtItems.map(d => `${d.item}(${d.amount.toLocaleString()}฿)`).join(' | '),
@@ -637,8 +631,8 @@ const App = () => {
     t += `ยอดขาย Mounjaro:\t฿${stats.mjRev.toLocaleString()}\n`;
     t += `ยอดขายรวมทั้งหมดรวม BL:\t฿${(stats.rev + stats.debt).toLocaleString()}\n`;
     t += `ยอดชำระหน้าร้าน:\t฿${stats.rev.toLocaleString()}\n`;
-    t += `ยอด BL:\t฿${stats.debt.toLocaleString()}\n`;
-    t += `ลูกค้ามีหนี้:\t${stats.debtC} คน\n-----------------------------\n`;
+    t += `ยอด BL คงเหลือ:\t฿${stats.debt.toLocaleString()}\n`;
+    t += `ลูกค้ามีหนี้คงเหลือ:\t${stats.debtC} คน\n-----------------------------\n`;
     Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).forEach(([n, c]) => { t += `ฉีด ${n} ครั้ง: ${c} คน\n`; });
     const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
     ta.select(); try { document.execCommand('copy'); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000); } catch {}
@@ -681,7 +675,7 @@ const App = () => {
         {/* ── Upload ── */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:28 }}>
           <UpZone label="① ไฟล์รายการขาย (Sales)" sub="คอลัมน์: HN · รายการ · ยอดชำระ · ประเภทชำระ" done={!!salesData} fname={sFile} onFile={handleSales} />
-          <UpZone label="② ไฟล์ยอดหนี้ (Debtors)"  sub="อัปโหลดไฟล์หนี้ของ Florenza Clinic"  done={!!debtData}  fname={dFile} onFile={handleDebt} />
+          <UpZone label="② ไฟล์ยอดหนี้ (Debtors)" sub="อัปโหลดไฟล์หนี้ของ Florenza Clinic"  done={!!debtData}  fname={dFile} onFile={handleDebt} />
         </div>
 
         {/* Errors */}
@@ -696,8 +690,8 @@ const App = () => {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:16 }}>
           {[
             { label:'ยอดขายรวมทั้งหมดรวม BL', val:`${(stats.rev + stats.debt).toLocaleString()} ฿`, sub:null,                  bg:'#eff6ff', ic:'dollar', icbg:'#dbeafe', icc:'#2563eb', vc:'#0f172a' },
-            { label:'ยอดชำระหน้าร้าน',         val:`${stats.rev.toLocaleString()} ฿`, sub:null, bg:'#f0fdf4', ic:'dollar',  icbg:'#dcfce7', icc:'#16a34a', vc:'#16a34a' },
-            { label:'ยอด BL',               val:`${stats.debt.toLocaleString()} ฿`, sub:`${stats.debtC} คนที่มีหนี้`, bg:'#fff1f2', ic:'alert',  icbg:'#ffe4e6', icc:'#e11d48', vc:'#e11d48' },
+            { label:'ยอดชำระหน้าร้าน',         val:`${stats.rev.toLocaleString()} ฿`,               sub:null,                  bg:'#f0fdf4', ic:'dollar', icbg:'#dcfce7', icc:'#16a34a', vc:'#16a34a' },
+            { label:'ยอด BL คงเหลือ',           val:`${stats.debt.toLocaleString()} ฿`,              sub:`${stats.debtC} คนที่มีหนี้คงค้าง`, bg:'#fff1f2', ic:'alert', icbg:'#ffe4e6', icc:'#e11d48', vc:'#e11d48' },
           ].map(({ label, val, sub, bg, ic, icbg, icc, vc }) => (
             <div key={label} style={{ background:'white', padding:20, borderRadius:28, border:'1px solid #f1f5f9', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:16 }}>
               <div style={{ padding:12, background:icbg, borderRadius:16, color:icc, flexShrink:0 }}><Ic n={ic} s={26} /></div>
@@ -772,15 +766,15 @@ const App = () => {
               <thead style={{ background:'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
                 <tr>
                   {[
-                    { k:'',            label:'#',                    align:'left'  },
+                    { k:'',            label:'#',                    align:'left'   },
                     { k:'name',        label:'ลูกค้า + บริการที่ใช้', align:'left'  },
-                    { k:'customerStatus', label:'ประเภท',           align:'center' },
-                    { k:'mounjaroInj', label:'สรุปบริการ',           align:'left'  },
-                    { k:'lastDate',    label:'บริการล่าสุด',          align:'center', blue:true },
-                    { k:'totalPaid',   label:'ยอดซื้อ',              align:'right' },
-                    { k:'debtAmount',  label:'ยอดหนี้',              align:'right', red:true },
-                    { k:'netAmount',   label:'ยอดสุทธิ',             align:'right', green:true },
-                    { k:'',            label:'ประวัติ',              align:'center' },
+                    { k:'customerStatus', label:'ประเภท',            align:'center' },
+                    { k:'mounjaroInj', label:'สรุปบริการ',            align:'left'  },
+                    { k:'lastDate',    label:'บริการล่าสุด',           align:'center', blue:true },
+                    { k:'totalPaid',   label:'ยอดซื้อ',               align:'right' },
+                    { k:'debtAmount',  label:'ยอดหนี้คงเหลือ',        align:'right', red:true },
+                    { k:'netAmount',   label:'ยอดสุทธิ',              align:'right', green:true },
+                    { k:'',            label:'ประวัติ',               align:'center' },
                   ].map(({ k, label, align, blue, red, green }, i) => (
                     <th key={i} className={k ? 'sh' : ''} onClick={() => k && doSort(k)}
                       style={{ padding:'16px 20px', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color: blue ? '#2563eb' : red ? '#e11d48' : green ? '#16a34a' : '#94a3b8', textAlign: align }}>
@@ -820,14 +814,14 @@ const App = () => {
             </div>
             <div>
               {[
-                ['ลูกค้าทั้งหมด',       `${filtered.length} คน`, '#0f172a'],
-                ['ลูกค้า Mounjaro',     `${stats.mjC} คน`,        '#2563eb'],
-                ['ลูกค้า PEPTIDE',      `${stats.pepC} คน`,       '#16a34a'],
-                ['ลูกค้าปากกา',         `${stats.pakaC} คน`,      '#9333ea'],
-                ['ที่ฉีด Mounjaro จริง',`${stats.injC} คน`,       '#9333ea'],
-                ['ฉีด Mounjaro รวม',    `${stats.mjInj} ครั้ง`,   '#2563eb'],
-                ['ลูกค้าใหม่',          `${stats.newC} คน`,       '#0ea5e9'],
-                ['ลูกค้าเก่า',          `${stats.oldC} คน`,       '#94a3b8'],
+                ['ลูกค้าทั้งหมด',        `${filtered.length} คน`, '#0f172a'],
+                ['ลูกค้า Mounjaro',      `${stats.mjC} คน`,        '#2563eb'],
+                ['ลูกค้า PEPTIDE',       `${stats.pepC} คน`,       '#16a34a'],
+                ['ลูกค้าปากกา',          `${stats.pakaC} คน`,      '#9333ea'],
+                ['ที่ฉีด Mounjaro จริง', `${stats.injC} คน`,       '#9333ea'],
+                ['ฉีด Mounjaro รวม',     `${stats.mjInj} ครั้ง`,   '#2563eb'],
+                ['ลูกค้าใหม่',           `${stats.newC} คน`,       '#0ea5e9'],
+                ['ลูกค้าเก่า',           `${stats.oldC} คน`,       '#94a3b8'],
               ].map(([l, v, c]) => (
                 <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #f1f5f9' }}>
                   <span style={{ color:'#64748b', fontWeight:700, fontSize:14 }}>{l}</span>
@@ -836,10 +830,10 @@ const App = () => {
               ))}
               <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:8 }}>
                 {[
-                  ['ยอดขาย Mounjaro',         `฿${stats.mjRev.toLocaleString()}`, '#eff6ff', '#1d4ed8'],
-                  ['ยอดขายรวมทั้งหมดรวม BL',  `฿${(stats.rev + stats.debt).toLocaleString()}`,   '#f8fafc', '#0f172a'],
-                  ['ยอดชำระหน้าร้าน',         `฿${stats.rev.toLocaleString()}`,   '#f0fdf4', '#16a34a'],
-                  ['ยอด BL',                 `฿${stats.debt.toLocaleString()}`,  '#fff1f2', '#e11d48'],
+                  ['ยอดขาย Mounjaro',        `฿${stats.mjRev.toLocaleString()}`,                    '#eff6ff', '#1d4ed8'],
+                  ['ยอดขายรวมทั้งหมดรวม BL', `฿${(stats.rev + stats.debt).toLocaleString()}`,       '#f8fafc', '#0f172a'],
+                  ['ยอดชำระหน้าร้าน',        `฿${stats.rev.toLocaleString()}`,                      '#f0fdf4', '#16a34a'],
+                  ['ยอด BL คงเหลือ',          `฿${stats.debt.toLocaleString()}`,                     '#fff1f2', '#e11d48'],
                 ].map(([l, v, bg, vc]) => (
                   <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderRadius:12, background:bg }}>
                     <span style={{ fontWeight:700, fontSize:14 }}>{l}</span>
@@ -878,7 +872,6 @@ const App = () => {
       {imgModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
           <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:520, position:'relative', maxHeight:'95vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
-            {/* Modal header */}
             <div style={{ position:'sticky', top:0, background:'white', borderRadius:'28px 28px 0 0', padding:'20px 24px 16px', borderBottom:'1px solid #f1f5f9', zIndex:10 }}>
               <button onClick={() => setImgModal(false)} style={{ position:'absolute', top:16, right:16, background:'#f8fafc', border:'none', borderRadius:'50%', padding:8, cursor:'pointer', color:'#94a3b8' }}>
                 <Ic n="x" s={18} />
@@ -893,7 +886,6 @@ const App = () => {
             </div>
 
             <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:20 }}>
-              {/* ช่องชื่อสาขา */}
               <div>
                 <label style={{ fontSize:11, fontWeight:900, color:'#475569', textTransform:'uppercase', letterSpacing:2, display:'block', marginBottom:8 }}>
                   ชื่อสาขา / คลินิก
@@ -909,17 +901,15 @@ const App = () => {
                 />
               </div>
 
-              {/* Preview */}
               <div>
                 <label style={{ fontSize:11, fontWeight:900, color:'#475569', textTransform:'uppercase', letterSpacing:2, display:'block', marginBottom:10 }}>
-                  Preview (ตัวอย่างรูปที่จะได้)
+                  Preview
                 </label>
                 <div style={{ borderRadius:16, overflow:'hidden', boxShadow:'0 4px 20px rgba(0,0,0,0.15)' }}>
                   <div ref={imgRef} style={{
                     background:'linear-gradient(135deg,#1e3a5f 0%,#1d4ed8 45%,#0ea5e9 100%)',
                     padding:24, fontFamily:'Sarabun,sans-serif',
                   }}>
-                    {/* Card header */}
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
                       <div>
                         <div style={{ color:'rgba(255,255,255,0.5)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, marginBottom:3 }}>
@@ -941,12 +931,11 @@ const App = () => {
                         )}
                       </div>
                     </div>
-                    {/* Money row */}
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:7, marginBottom:9 }}>
                       {[
-                        { l:'ยอดขายรวมทั้งหมดรวม BL', v:`฿${(stats.rev + stats.debt).toLocaleString()}`,  bg:'rgba(255,255,255,0.15)', vc:'white' },
-                        { l:'ยอดชำระหน้าร้าน',        v:`฿${stats.rev.toLocaleString()}`, bg:'rgba(16,185,129,0.25)',   vc:'#6ee7b7' },
-                        { l:'ยอด BL',               v:`฿${stats.debt.toLocaleString()}`,  bg:'rgba(244,63,94,0.28)', vc:'#fda4af' },
+                        { l:'ยอดขายรวมทั้งหมดรวม BL', v:`฿${(stats.rev + stats.debt).toLocaleString()}`, bg:'rgba(255,255,255,0.15)', vc:'white' },
+                        { l:'ยอดชำระหน้าร้าน',        v:`฿${stats.rev.toLocaleString()}`,               bg:'rgba(16,185,129,0.25)',  vc:'#6ee7b7' },
+                        { l:'ยอด BL คงเหลือ',          v:`฿${stats.debt.toLocaleString()}`,              bg:'rgba(244,63,94,0.28)',   vc:'#fda4af' },
                       ].map(({ l, v, bg, vc }) => (
                         <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 12px' }}>
                           <div style={{ color:'rgba(255,255,255,0.5)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
@@ -954,7 +943,6 @@ const App = () => {
                         </div>
                       ))}
                     </div>
-                    {/* Customer grid */}
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:9 }}>
                       {[
                         { l:'ลูกค้าทั้งหมด', v:filtered.length },
@@ -972,7 +960,6 @@ const App = () => {
                         </div>
                       ))}
                     </div>
-                    {/* Mounjaro */}
                     <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:12, padding:'11px 14px', marginBottom:9 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
                         <span style={{ color:'rgba(255,255,255,0.65)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>💉 Mounjaro</span>
@@ -981,11 +968,10 @@ const App = () => {
                       <div style={{ color:'white', fontSize:12, fontWeight:800 }}>
                         ฉีดทั้งหมด <span style={{ fontSize:22, color:'#60a5fa', fontWeight:900 }}>{stats.mjInj}</span> ครั้ง
                         <span style={{ color:'rgba(255,255,255,0.5)', fontSize:10, marginLeft:8 }}>
-                          · ที่ฉีดจริง {stats.injC} คน · มีหนี้ {stats.debtC} คน
+                          · ที่ฉีดจริง {stats.injC} คน · มีหนี้คงค้าง {stats.debtC} คน
                         </span>
                       </div>
                     </div>
-                    {/* Breakdown */}
                     {Object.keys(stats.injBD).length > 0 && (
                       <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:10, padding:'9px 13px', marginBottom:9 }}>
                         <div style={{ color:'rgba(255,255,255,0.4)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:5 }}>
@@ -1000,7 +986,6 @@ const App = () => {
                         </div>
                       </div>
                     )}
-                    {/* Footer */}
                     <div style={{ marginTop:12, borderTop:'1px solid rgba(255,255,255,0.12)', paddingTop:9, display:'flex', justifyContent:'space-between' }}>
                       <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>INJECTION HISTORY + DEBT DASHBOARD</div>
                       <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>ข้อมูล {filtered.length} HN</div>
@@ -1009,12 +994,13 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Export button */}
               <button onClick={doExportImage} disabled={exporting || !ready}
                 style={{
                   width:'100%', padding:'14px', borderRadius:16, fontSize:14, fontWeight:900,
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: exporting ? 'not-allowed' : 'pointer', border:'none',
-                  background: exporting ? '#e2e8f0' : '#7c3aed', color: exporting ? '#94a3b8' : 'white',
+                  display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                  cursor: exporting ? 'not-allowed' : 'pointer', border:'none',
+                  background: exporting ? '#e2e8f0' : '#7c3aed',
+                  color: exporting ? '#94a3b8' : 'white',
                   boxShadow: exporting ? 'none' : '0 4px 15px rgba(124,58,237,0.35)',
                 }}>
                 {exporting
