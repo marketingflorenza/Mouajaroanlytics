@@ -184,50 +184,109 @@ const parseSales = (rows) => {
 
 /* ── Parse Debt ── */
 const parseDebt = (rows) => {
-  const H = rows[0].map(h => String(h || '').trim());
-  const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
-  const idx = {
-    name:   fi(['ชื่อลูกค้า', 'ชื่อ-สกุล']),
-    item:   fi(['รายการ']),
-    date:   fi(['วันที่']),
-    amount: fi(['คงเหลือ', 'ค้างชำระ']),
-    status: fi(['สถานะ']),
-  };
+  /* หา header row ที่มีคำว่า "คงเหลือ" หรือ "ใบเสร็จ" */
+  let headerRowIdx = -1;
+  let idxReceipt = -1, idxItem = -1, idxDebt = -1, idxPaid = -1, idxRemain = -1, idxPct = -1;
+
+  for (let i = 0; i < Math.min(20, rows.length); i++) {
+    const r = rows[i].map(c => String(c || '').trim());
+    const hasHeader = r.some(c => c.includes('คงเหลือ') || c.includes('ใบเสร็จ') || c.includes('ชำระแล้ว'));
+    if (hasHeader) {
+      headerRowIdx = i;
+      idxReceipt = r.findIndex(c => c.includes('ใบเสร็จ') || c.includes('รหัส'));
+      idxItem    = r.findIndex(c => c.includes('รายการ') || c.includes('ชื่อ'));
+      idxDebt    = r.findIndex(c => c.includes('ยอดหนี้') || c.includes('ยกมา'));
+      idxPaid    = r.findIndex(c => c.includes('ชำระแล้ว') || c.includes('ชำระ') && !c.includes('%'));
+      idxRemain  = r.findIndex(c => c.includes('คงเหลือ'));
+      idxPct     = r.findIndex(c => c.includes('ค้างชำระ%') || c.includes('ค้างชำระ'));
+      break;
+    }
+  }
+
+  /* fallback: สมมติ layout คงที่:
+     col0=ลำดับ col1=ใบเสร็จ col2=รายการ col3=ยอดหนี้ยกมา col4=ชำระแล้ว col5=คงเหลือ col6=ค้างชำระ% */
+  if (idxRemain === -1) idxRemain = 5;
+  if (idxItem   === -1) idxItem   = 2;
+  if (idxPaid   === -1) idxPaid   = 4;
+  if (idxDebt   === -1) idxDebt   = 3;
+  if (idxReceipt=== -1) idxReceipt= 1;
+
   const D = {};
   let curHN = null, curName = null, curPhone = null;
-  for (let i = 1; i < rows.length; i++) {
+  const startRow = headerRowIdx >= 0 ? headerRowIdx + 1 : 1;
+
+  for (let i = startRow; i < rows.length; i++) {
     const r = rows[i];
     if (!r || r.length === 0) continue;
-    const colName = String(r[idx.name > -1 ? idx.name : 1] || '').trim();
-    if (colName && colName !== 'รวม' && colName.includes('/')) {
-      const parts = colName.split('/');
-      curName = parts[0].trim();
-      curHN = normHN(parts[1]);
-      curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
+
+    /* ── ตรวจว่าเป็น header ลูกค้า (ชื่อ / HN / Tel) ── */
+    /* ลองทุก cell ในแถว */
+    let foundCustomer = false;
+    for (let ci = 0; ci < r.length; ci++) {
+      const cell = String(r[ci] || '').trim();
+      /* รูปแบบ: "ชื่อ /HN /Tel.xxx" หรือ "ชื่อ/HN/Tel" */
+      if (cell.includes('/') && !cell.startsWith('B') && !cell.startsWith('I-')) {
+        const parts = cell.split('/').map(p => p.trim());
+        /* ต้องมีอย่างน้อย 2 ส่วน และส่วนที่ 2 ดูเหมือน HN (ตัวเลข) */
+        if (parts.length >= 2 && /^\d+$/.test(parts[1].replace(/\D/g,''))) {
+          curName  = parts[0].trim();
+          curHN    = normHN(parts[1].replace(/\D/g, ''));
+          curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
+          foundCustomer = true;
+          break;
+        }
+      }
+    }
+    if (foundCustomer) continue;
+    if (!curHN) continue;
+
+    /* ── ข้ามแถว "รวม" หรือ แถวว่าง ── */
+    const firstCell = String(r[0] || '').trim();
+    if (firstCell === 'รวม' || firstCell === '') {
+      /* ถ้า "รวม" ทั้งแถว ถือว่าจบลูกค้านี้ */
+      const allEmpty = r.every(c => String(c || '').trim() === '' || String(c || '').trim() === 'รวม');
+      if (allEmpty) { curHN = null; curName = null; }
       continue;
     }
-    if (!curHN) continue;
-    const itemName = String(r[idx.item > -1 ? idx.item : 3] || '').trim();
-    if (!itemName || itemName === 'รวม') continue;
+
+    /* ── ดึงชื่อรายการ ── */
+    const itemName = String(r[idxItem] || r[1] || '').trim();
+    if (!itemName) continue;
+    /* ข้าม header row ซ้ำ */
+    if (itemName.includes('รายการ') || itemName.includes('ใบเสร็จ')) continue;
+
+    /* ── กรองเฉพาะ keyword ── */
     if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
-    const amtCol = idx.amount > -1 ? idx.amount : (r.length - 1);
-    const amtStr = String(r[amtCol] || '0').replace(/,/g, '');
-    const amt = Math.abs(parseFloat(amtStr) || 0);
-    if (amt === 0) continue;
-    const dCol = idx.date > -1 ? idx.date : 5;
-    const date = pDate(r[dCol]);
-    const statusStr = idx.status !== -1 ? String(r[idx.status] || '') : 'ค้างชำระ';
+
+    /* ── ยอดคงเหลือ = คอลัมน์ "คงเหลือ" โดยตรง ── */
+    const remainStr = String(r[idxRemain] || '0').replace(/,/g, '');
+    const remain    = Math.abs(parseFloat(remainStr) || 0);
+    if (remain === 0) continue;   /* ชำระหมดแล้ว ข้าม */
+
+    const debtStr   = String(r[idxDebt]  || '0').replace(/,/g, '');
+    const paidStr   = String(r[idxPaid]  || '0').replace(/,/g, '');
+    const origDebt  = Math.abs(parseFloat(debtStr) || 0);
+    const paid      = Math.abs(parseFloat(paidStr)  || 0);
+    const pctStr    = idxPct >= 0 ? String(r[idxPct] || '') : '';
+
+    /* รหัสใบเสร็จ / วันที่ */
+    const receipt = String(r[idxReceipt] || '').trim();
+
     if (!D[curHN]) {
       D[curHN] = { hn: curHN, name: curName, phone: curPhone, totalDebt: 0, items: [] };
     }
-    D[curHN].totalDebt += amt;
+    D[curHN].totalDebt += remain;   /* ใช้ยอดคงเหลือเป็นยอดหนี้จริง */
     D[curHN].items.push({
-      item: itemName,
-      amount: amt,
-      status: statusStr,
-      date,
-      dateStr: fmt(date),
-      overdue: statusStr.includes('เกิน')
+      item:     itemName,
+      receipt,
+      origDebt,
+      paid,
+      amount:   remain,             /* ยอดคงเหลือ */
+      pct:      pctStr,
+      date:     new Date(0),
+      dateStr:  '-',
+      overdue:  parseFloat(pctStr)  > 0,
+      status:   remain > 0 ? 'ค้างชำระ' : 'ชำระครบ',
     });
   }
   return D;
@@ -327,12 +386,18 @@ const ServiceTimeline = ({ history, debtItems }) => {
           <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid #fecdd3' }}>
             <p style={{ fontSize:9, fontWeight:900, color:'#f43f5e', textTransform:'uppercase', marginBottom:6 }}>⚠ ยอดหนี้คงค้าง</p>
             {debtItems.map((d, i) => (
-              <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 10px', borderRadius:10, background:'#fff1f2', border:'1px solid #fecdd3', marginBottom:4 }}>
-                <div>
-                  <p style={{ fontSize:10, fontWeight:700, color:'#be123c' }}>{d.item}</p>
-                  <span style={{ fontSize:8, fontWeight:700, padding:'1px 6px', borderRadius:20, background: d.overdue ? '#fee2e2' : '#fef9c3', color: d.overdue ? '#dc2626' : '#a16207' }}>{d.status}</span>
+              <div key={i} style={{ padding:'8px 10px', borderRadius:10, background:'#fff1f2', border:'1px solid #fecdd3', marginBottom:4 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
+                  <p style={{ fontSize:10, fontWeight:700, color:'#be123c', margin:0, flex:1 }}>{d.item}</p>
+                  <span style={{ fontSize:12, fontWeight:900, color:'#e11d48', marginLeft:8, flexShrink:0 }}>{d.amount.toLocaleString()}฿</span>
                 </div>
-                <span style={{ fontSize:11, fontWeight:900, color:'#e11d48' }}>{d.amount.toLocaleString()}฿</span>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  {d.origDebt > 0 && <span style={{ fontSize:8, background:'#fef2f2', color:'#991b1b', padding:'1px 7px', borderRadius:20, fontWeight:700, border:'1px solid #fecdd3' }}>หนี้ตั้งต้น {d.origDebt.toLocaleString()}฿</span>}
+                  {d.paid > 0     && <span style={{ fontSize:8, background:'#f0fdf4', color:'#15803d', padding:'1px 7px', borderRadius:20, fontWeight:700, border:'1px solid #bbf7d0' }}>ชำระแล้ว {d.paid.toLocaleString()}฿</span>}
+                  <span style={{ fontSize:8, background: d.overdue ? '#fee2e2' : '#fef9c3', color: d.overdue ? '#dc2626' : '#a16207', padding:'1px 7px', borderRadius:20, fontWeight:700 }}>
+                    {d.status}{d.pct ? ` ${d.pct}%` : ''}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
