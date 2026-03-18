@@ -191,111 +191,117 @@ const parseSales = (rows) => {
 
 /* ── Parse Debt ── */
 const parseDebt = (rows) => {
-  /* หา header row ที่มีคำว่า "คงเหลือ" หรือ "ใบเสร็จ" */
-  let headerRowIdx = -1;
-  let idxReceipt = -1, idxItem = -1, idxDebt = -1, idxPaid = -1, idxRemain = -1, idxPct = -1;
+  /*
+   * โครงสร้างจริงของไฟล์ (ยืนยันจาก python):
+   * Row 0  : col0=ลำดับ  col1=ชื่อลูกค้า  col2=รหัส  col3=รายการ
+   *          col4=ใบเสร็จ  col5=วันที่  col6=ยอดหนี้ยกมา
+   *          col7=ยอดหนี้ใหม่  col8=ชำระแล้ว  col9=ลดหนี้  col10=คงเหลือค้างชำระ
+   * Row ลูกค้า : col0=ลำดับ(number)  col1="ชื่อ /HN /Tel.xxx"  col2-10 ว่าง
+   * Row รายการ : col0 ว่าง  col1 ว่าง  col2=รหัส  col3=รายการ
+   *             col4=ใบเสร็จ  col5=วันที่  col6=ยอดหนี้ยกมา
+   *             col7=ยอดหนี้ใหม่  col8=ชำระแล้ว  col9=ลดหนี้  col10=คงเหลือ
+   * Row รวม   : col5='รวม'  col6=รวมยอดหนี้  col10=รวมคงเหลือ
+   *
+   * หา column indices จาก header row ก่อน แต่มี fallback คงที่
+   */
 
-  for (let i = 0; i < Math.min(20, rows.length); i++) {
-    const r = rows[i].map(c => String(c || '').trim());
-    const hasHeader = r.some(c => c.includes('คงเหลือ') || c.includes('ใบเสร็จ') || c.includes('ชำระแล้ว'));
-    if (hasHeader) {
-      headerRowIdx = i;
-      idxReceipt = r.findIndex(c => c.includes('ใบเสร็จ') || c.includes('รหัส'));
-      idxItem    = r.findIndex(c => c.includes('รายการ') || c.includes('ชื่อ'));
-      idxDebt    = r.findIndex(c => c.includes('ยอดหนี้') || c.includes('ยกมา'));
-      idxPaid    = r.findIndex(c => c.includes('ชำระแล้ว') || c.includes('ชำระ') && !c.includes('%'));
-      idxRemain  = r.findIndex(c => c.includes('คงเหลือ'));
-      idxPct     = r.findIndex(c => c.includes('ค้างชำระ%') || c.includes('ค้างชำระ'));
+  /* --- ค้นหา column indices จาก header row --- */
+  let idxName=1, idxItem=3, idxReceipt=4, idxDate=5,
+      idxDebt=6, idxDebt2=7, idxPaid=8, idxDiscount=9, idxRemain=10;
+
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const r = (rows[i] || []).map(c => String(c || '').replace(/\n/g,' ').trim());
+    if (r.some(c => c.includes('คงเหลือ') || c.includes('ชำระแล้ว'))) {
+      const fi = (needle) => r.findIndex(c => c.includes(needle));
+      const iN = fi('ชื่อลูกค้า');    if (iN >= 0) idxName    = iN;
+      const iI = fi('รายการ');         if (iI >= 0) idxItem    = iI;
+      const iR = fi('ใบเสร็จ');        if (iR >= 0) idxReceipt = iR;
+      const iD = fi('วันที่');          if (iD >= 0) idxDate    = iD;
+      const iPd= fi('ชำระแล้ว');       if (iPd>= 0) idxPaid    = iPd;
+      const iRm= fi('คงเหลือ');        if (iRm>= 0) idxRemain  = iRm;
+      // ยอดหนี้ยกมา / ยอดหนี้ใหม่
+      const dbs = r.map((c,idx) => c.includes('ยอดหนี้') ? idx : -1).filter(x=>x>=0);
+      if (dbs.length >= 2) { idxDebt = dbs[0]; idxDebt2 = dbs[1]; }
+      else if (dbs.length === 1) idxDebt = dbs[0];
       break;
     }
   }
 
-  /* fallback: สมมติ layout คงที่:
-     col0=ลำดับ col1=ใบเสร็จ col2=รายการ col3=ยอดหนี้ยกมา col4=ชำระแล้ว col5=คงเหลือ col6=ค้างชำระ% */
-  if (idxRemain === -1) idxRemain = 5;
-  if (idxItem   === -1) idxItem   = 2;
-  if (idxPaid   === -1) idxPaid   = 4;
-  if (idxDebt   === -1) idxDebt   = 3;
-  if (idxReceipt=== -1) idxReceipt= 1;
+  const get = (r, idx) => String(r[idx] ?? '').replace(/,/g,'').trim();
+  const num = (v) => Math.abs(parseFloat(v) || 0);
 
+  /* --- ฟังก์ชันตรวจว่า row นี้คือ row ลูกค้า --- */
+  const parseCustomerRow = (r) => {
+    // col1 ต้องมี "/" และมี pattern "ชื่อ /HN /Tel."
+    const cell = String(r[idxName] || r[1] || '').trim();
+    if (!cell.includes('/')) return null;
+    // ตัด pattern "Tel." ออก แล้ว split ด้วย "/"
+    const parts = cell.split('/').map(p => p.trim());
+    if (parts.length < 2) return null;
+    const hnRaw = parts[1].replace(/^FRC/i,'').replace(/\D/g,'');
+    if (!hnRaw || hnRaw.length < 3) return null;
+    const hn    = normHN(parts[1].trim());
+    const name  = parts[0].trim() || 'ไม่ระบุ';
+    const phone = parts.length > 2
+      ? parts.slice(2).join('').replace(/Tel\.?/i,'').trim()
+      : '-';
+    return { hn, name, phone };
+  };
+
+  /* --- อ่านทุก row --- */
   const D = {};
   let curHN = null, curName = null, curPhone = null;
-  const startRow = headerRowIdx >= 0 ? headerRowIdx + 1 : 1;
 
-  for (let i = startRow; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r || r.length === 0) continue;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i] || [];
 
-    /* ── ตรวจว่าเป็น header ลูกค้า (ชื่อ / HN / Tel) ── */
-    let foundCustomer = false;
-    for (let ci = 0; ci < r.length; ci++) {
-      const cell = String(r[ci] || '').trim();
-      if (cell.includes('/') && !cell.startsWith('B') && !cell.startsWith('I-')) {
-        const parts = cell.split('/').map(p => p.trim());
-        if (parts.length >= 2) {
-          const hnRaw = parts[1].trim();
-          /* รองรับ "FRC20585", "20585", "FRC20585" */
-          const hn = normHN(hnRaw);
-          if (hn && /\d/.test(hn)) {
-            curName  = parts[0].trim();
-            curHN    = hn;
-            curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
-            foundCustomer = true;
-            break;
-          }
-        }
+    /* ข้ามแถวว่างสนิท */
+    if (r.every(c => String(c||'').trim() === '')) continue;
+
+    /* ตรวจ row ลูกค้า: col0 เป็นตัวเลข (ลำดับ) และ col1 มีข้อมูล HN */
+    const col0 = String(r[0] || '').trim();
+    const col1 = String(r[1] || '').trim();
+
+    if (col0 !== '' && !isNaN(parseFloat(col0)) && col1 !== '') {
+      const cust = parseCustomerRow(r);
+      if (cust) {
+        curHN = cust.hn; curName = cust.name; curPhone = cust.phone;
+        continue;
       }
     }
-    if (foundCustomer) continue;
+
+    /* ข้ามแถว "รวม" */
+    const col5 = String(r[5] || r[idxDate] || '').trim();
+    if (col5 === 'รวม') continue;
+
+    /* ต้องมี curHN แล้ว */
     if (!curHN) continue;
 
-    /* ── ข้ามแถว "รวม" หรือ แถวว่าง ── */
-    const firstCell = String(r[0] || '').trim();
-    if (firstCell === 'รวม' || firstCell === '') {
-      /* ถ้า "รวม" ทั้งแถว ถือว่าจบลูกค้านี้ */
-      const allEmpty = r.every(c => String(c || '').trim() === '' || String(c || '').trim() === 'รวม');
-      if (allEmpty) { curHN = null; curName = null; }
-      continue;
-    }
-
-    /* ── ดึงชื่อรายการ ── */
-    const itemName = String(r[idxItem] || r[1] || '').trim();
+    /* ดึงชื่อรายการ (col3) */
+    const itemName = String(r[idxItem] || r[3] || '').trim();
     if (!itemName) continue;
-    /* ข้าม header row ซ้ำ */
-    if (itemName.includes('รายการ') || itemName.includes('ใบเสร็จ')) continue;
+    if (itemName === 'รายการ' || itemName === 'ใบเสร็จ' || itemName === 'ชื่อลูกค้า') continue;
 
-    /* ── กรองเฉพาะ keyword ── */
-    if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
-
-    /* ── ยอดคงเหลือ = คอลัมน์ "คงเหลือ" โดยตรง ── */
-    const remainStr = String(r[idxRemain] || '0').replace(/,/g, '');
-    const remain    = Math.abs(parseFloat(remainStr) || 0);
+    /* ยอดคงเหลือ (col10) */
+    const remain = num(get(r, idxRemain));
     if (remain === 0) continue;   /* ชำระหมดแล้ว ข้าม */
 
-    const debtStr   = String(r[idxDebt]  || '0').replace(/,/g, '');
-    const paidStr   = String(r[idxPaid]  || '0').replace(/,/g, '');
-    const origDebt  = Math.abs(parseFloat(debtStr) || 0);
-    const paid      = Math.abs(parseFloat(paidStr)  || 0);
-    const pctStr    = idxPct >= 0 ? String(r[idxPct] || '') : '';
-
-    /* รหัสใบเสร็จ / วันที่ */
-    const receipt = String(r[idxReceipt] || '').trim();
+    /* ยอดหนี้ยกมา (col6) และ ยอดใหม่ (col7) */
+    const origDebt = num(get(r, idxDebt)) || num(get(r, idxDebt2));
+    const paid     = num(get(r, idxPaid));
+    const receipt  = String(r[idxReceipt] || r[4] || '').trim();
 
     if (!D[curHN]) {
       D[curHN] = { hn: curHN, name: curName, phone: curPhone, totalDebt: 0, items: [] };
     }
-    D[curHN].totalDebt += remain;   /* ใช้ยอดคงเหลือเป็นยอดหนี้จริง */
+    D[curHN].totalDebt += remain;
     D[curHN].items.push({
-      item:     itemName,
-      receipt,
-      origDebt,
-      paid,
-      amount:   remain,             /* ยอดคงเหลือ */
-      pct:      pctStr,
-      date:     new Date(0),
-      dateStr:  '-',
-      overdue:  parseFloat(pctStr)  > 0,
-      status:   remain > 0 ? 'ค้างชำระ' : 'ชำระครบ',
+      item: itemName, receipt, origDebt, paid,
+      amount: remain,
+      pct: '',
+      date: new Date(0), dateStr: '-',
+      overdue: false,
+      status: 'ค้างชำระ',
     });
   }
   return D;
@@ -556,7 +562,8 @@ const App = () => {
     r.onload = e => {
       try {
         const wb = XLSX.read(e.target.result, { type:'binary' });
-        cb(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1 }));
+        // defval:'' ทำให้ทุก cell มีค่า ไม่ใช่ undefined → index ถูกต้อง
+        cb(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' }));
       } catch { cb(null); }
     };
     r.readAsBinaryString(file);
@@ -574,7 +581,12 @@ const App = () => {
     setDFile(file.name); setDErr(null);
     readX(file, rows => {
       if (!rows || rows.length < 2) { setDErr('ไม่พบข้อมูลในไฟล์หนี้'); return; }
-      try { setDebtData(parseDebt(rows)); } catch (e) { setDErr('รูปแบบไฟล์หนี้ไม่ถูกต้อง'); }
+      try {
+        const result = parseDebt(rows);
+        const count = Object.keys(result).length;
+        if (count === 0) setDErr('ไม่พบข้อมูลหนี้ (อาจไม่มีรายการค้างชำระ หรือรูปแบบไฟล์ต่างจากที่คาดไว้)');
+        setDebtData(result);
+      } catch (e) { setDErr('รูปแบบไฟล์หนี้ไม่ถูกต้อง: ' + e.message); }
     });
   };
 
