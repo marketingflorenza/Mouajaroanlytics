@@ -398,23 +398,36 @@ const CRow = ({ row, i }) => {
             <p style={{ fontSize:7, color:'#93c5fd', fontWeight:700, textTransform:'uppercase' }}>latest</p>
           </div>
         </td>
+        {/* ยอดรวมสุทธิ = totalPaid + debtPaid - debtAmount */}
         <td className="px-5 py-4 text-right">
-          <p style={{ fontSize:15, fontWeight:900, color:'#0f172a' }}>{row.totalPaid.toLocaleString()}</p>
-          {row.debtPaid > 0 && <p style={{ fontSize:9, color:'#16a34a', fontWeight:700 }}>+{row.debtPaid.toLocaleString()} ชำระหนี้</p>}
+          <div style={{ display:'inline-block', textAlign:'right' }}>
+            <p style={{ fontSize:17, fontWeight:900, color: row.netAmount >= 0 ? '#16a34a' : '#e11d48', margin:0 }}>
+              {row.netAmount.toLocaleString()}
+            </p>
+            <p style={{ fontSize:8, color:'#94a3b8', fontWeight:700, marginTop:2 }}>
+              {(row.totalPaid + row.debtPaid).toLocaleString()} − {row.debtAmount.toLocaleString()}
+            </p>
+          </div>
         </td>
+        {/* ยอดจ่ายแล้ว = totalPaid + debtPaid */}
         <td className="px-5 py-4 text-right">
-          <p style={{ fontSize:15, fontWeight:900, color:'#7c3aed' }}>{(row.totalPaid + row.debtPaid).toLocaleString()}</p>
-          <p style={{ fontSize:8, color:'#a78bfa', fontWeight:700 }}>รวมทุกรายการ</p>
+          <div style={{ display:'inline-block', textAlign:'right' }}>
+            <p style={{ fontSize:15, fontWeight:900, color:'#0f172a', margin:0 }}>
+              {(row.totalPaid + row.debtPaid).toLocaleString()}
+            </p>
+            {row.debtPaid > 0 && (
+              <div style={{ marginTop:3 }}>
+                <span style={{ fontSize:8, color:'#64748b', fontWeight:700 }}>{row.totalPaid.toLocaleString()} + </span>
+                <span style={{ fontSize:8, color:'#16a34a', fontWeight:700 }}>{row.debtPaid.toLocaleString()} หนี้</span>
+              </div>
+            )}
+          </div>
         </td>
+        {/* ยอดหนี้คงเหลือ */}
         <td className="px-5 py-4 text-right">
           {row.debtAmount > 0
-            ? <p style={{ fontSize:15, fontWeight:900, color:'#e11d48' }}>{row.debtAmount.toLocaleString()}</p>
-            : <span style={{ color:'#e2e8f0', fontWeight:700 }}>—</span>}
-        </td>
-        <td className="px-5 py-4 text-right">
-          <p style={{ fontSize:15, fontWeight:900, color: row.netAmount >= 0 ? '#16a34a' : '#ea580c' }}>
-            {row.netAmount.toLocaleString()}
-          </p>
+            ? <p style={{ fontSize:15, fontWeight:900, color:'#e11d48', margin:0 }}>{row.debtAmount.toLocaleString()}</p>
+            : <span style={{ color:'#e2e8f0', fontSize:18, fontWeight:700 }}>—</span>}
         </td>
         <td className="px-4 py-4 text-center">
           <button onClick={() => setExp(v => !v)}
@@ -431,7 +444,7 @@ const CRow = ({ row, i }) => {
       </tr>
       {exp && (
         <tr style={{ background:'#f8fafc' }}>
-          <td colSpan="10" style={{ padding:'0 40px 20px' }}>
+          <td colSpan="9" style={{ padding:'0 40px 20px' }}>
             <div className="slide-down">
               <ServiceTimeline history={row.serviceHistory || []} debtItems={row.debtItems || []} />
             </div>
@@ -775,19 +788,18 @@ const App = () => {
               <thead style={{ background:'#f8fafc', borderBottom:'1px solid #f1f5f9' }}>
                 <tr>
                   {[
-                    { k:'',            label:'#',                    align:'left'   },
-                    { k:'name',        label:'ลูกค้า + บริการที่ใช้', align:'left'  },
+                    { k:'',               label:'#',                 align:'left'   },
+                    { k:'name',           label:'ลูกค้า + บริการ',   align:'left'   },
                     { k:'customerStatus', label:'ประเภท',            align:'center' },
-                    { k:'mounjaroInj', label:'สรุปบริการ',            align:'left'  },
-                    { k:'lastDate',    label:'บริการล่าสุด',           align:'center', blue:true },
-                    { k:'totalPaid',   label:'ยอดซื้อ (หน้าร้าน)',    align:'right' },
-                    { k:'',            label:'ยอดซื้อทั้งหมด',        align:'right', purple:true },
-                    { k:'debtAmount',  label:'ยอดหนี้คงเหลือ',        align:'right', red:true },
-                    { k:'netAmount',   label:'ยอดสุทธิ',              align:'right', green:true },
-                    { k:'',            label:'ประวัติ',               align:'center' },
-                  ].map(({ k, label, align, blue, red, green, purple }, i) => (
+                    { k:'mounjaroInj',    label:'สรุปบริการ',         align:'left'   },
+                    { k:'lastDate',       label:'บริการล่าสุด',       align:'center', blue:true  },
+                    { k:'netAmount',      label:'ยอดรวมสุทธิ',        align:'right',  green:true },
+                    { k:'totalPaid',      label:'ยอดจ่ายแล้ว',        align:'right'  },
+                    { k:'debtAmount',     label:'ยอดหนี้คงเหลือ',     align:'right',  red:true   },
+                    { k:'',               label:'ประวัติ',            align:'center' },
+                  ].map(({ k, label, align, blue, red, green }, i) => (
                     <th key={i} className={k ? 'sh' : ''} onClick={() => k && doSort(k)}
-                      style={{ padding:'16px 20px', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color: blue ? '#2563eb' : red ? '#e11d48' : green ? '#16a34a' : purple ? '#7c3aed' : '#94a3b8', textAlign: align }}>
+                      style={{ padding:'16px 20px', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color: blue ? '#2563eb' : red ? '#e11d48' : green ? '#16a34a' : '#94a3b8', textAlign: align }}>
                       <div style={{ display:'flex', alignItems:'center', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start' }}>
                         {label}{k && si(k)}
                       </div>
@@ -800,7 +812,7 @@ const App = () => {
                   ? filtered.map((row, i) => <CRow key={row.hn} row={row} i={i} />)
                   : (
                     <tr>
-                      <td colSpan="10" style={{ padding:'100px 0', textAlign:'center', color:'#cbd5e1', fontWeight:700, fontStyle:'italic' }}>
+                      <td colSpan="9" style={{ padding:'100px 0', textAlign:'center', color:'#cbd5e1', fontWeight:700, fontStyle:'italic' }}>
                         {ready ? 'ไม่พบข้อมูลตามเงื่อนไข' : 'กรุณาอัปโหลดไฟล์ Sales และ/หรือ Debt'}
                       </td>
                     </tr>
