@@ -109,7 +109,14 @@ const fmt = (d) =>
     ? d.toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' })
     : '-';
 
-const normHN = (v) => String(v || '').trim();
+/* normHN: รองรับทั้ง "FRC20585" และ "20585" → ให้เป็น "FRC20585" เสมอ */
+const normHN = (v) => {
+  const s = String(v || '').trim().toUpperCase().replace(/\s/g, '');
+  if (!s) return '';
+  if (/^FRC\d+$/.test(s)) return s;                      // FRC20585 → FRC20585
+  if (/^\d+$/.test(s))    return 'FRC' + s.padStart(5,'0'); // 20585 → FRC20585
+  return s;
+};
 
 /* ── Parse Sales ── */
 const parseSales = (rows) => {
@@ -220,20 +227,22 @@ const parseDebt = (rows) => {
     if (!r || r.length === 0) continue;
 
     /* ── ตรวจว่าเป็น header ลูกค้า (ชื่อ / HN / Tel) ── */
-    /* ลองทุก cell ในแถว */
     let foundCustomer = false;
     for (let ci = 0; ci < r.length; ci++) {
       const cell = String(r[ci] || '').trim();
-      /* รูปแบบ: "ชื่อ /HN /Tel.xxx" หรือ "ชื่อ/HN/Tel" */
       if (cell.includes('/') && !cell.startsWith('B') && !cell.startsWith('I-')) {
         const parts = cell.split('/').map(p => p.trim());
-        /* ต้องมีอย่างน้อย 2 ส่วน และส่วนที่ 2 ดูเหมือน HN (ตัวเลข) */
-        if (parts.length >= 2 && /^\d+$/.test(parts[1].replace(/\D/g,''))) {
-          curName  = parts[0].trim();
-          curHN    = normHN(parts[1].replace(/\D/g, ''));
-          curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
-          foundCustomer = true;
-          break;
+        if (parts.length >= 2) {
+          const hnRaw = parts[1].trim();
+          /* รองรับ "FRC20585", "20585", "FRC20585" */
+          const hn = normHN(hnRaw);
+          if (hn && /\d/.test(hn)) {
+            curName  = parts[0].trim();
+            curHN    = hn;
+            curPhone = parts.length > 2 ? parts[2].replace(/Tel\.?/i, '').trim() : '-';
+            foundCustomer = true;
+            break;
+          }
         }
       }
     }
