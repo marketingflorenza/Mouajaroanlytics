@@ -282,6 +282,10 @@ const parseDebt = (rows) => {
     if (!itemName) continue;
     if (itemName === 'รายการ' || itemName === 'ใบเสร็จ' || itemName === 'ชื่อลูกค้า') continue;
 
+    /* กรองเฉพาะ Mounjaro / PEPTIDE / ปากกา / SlimNow */
+    const iType = getType(itemName);
+    if (iType === 'other') continue;
+
     /* ยอดคงเหลือ (col10) */
     const remain = num(get(r, idxRemain));
     if (remain === 0) continue;   /* ชำระหมดแล้ว ข้าม */
