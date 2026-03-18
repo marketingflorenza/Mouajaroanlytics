@@ -502,12 +502,13 @@ const App = () => {
     all.forEach(hn => {
       const s = salesData?.[hn];
       const d = debtData?.[hn];
-      const totalPaid = s ? s.totalPaid  : 0;
-      const debtPaid  = s ? s.debtPaid   : 0;
-      const rawDebt   = d ? d.totalDebt  : 0;
-      // ยอดหนี้คงเหลือ = ยอดหนี้จากไฟล์ Debt - ที่ชำระแล้วในไฟล์ Sales
+      const totalPaid = s ? s.totalPaid  : 0;   // ยอดซื้อหน้าร้าน (ไม่รวมชำระหนี้)
+      const debtPaid  = s ? s.debtPaid   : 0;   // ยอดที่นำมาชำระหนี้
+      const rawDebt   = d ? d.totalDebt  : 0;   // ยอดหนี้ดิบจากไฟล์ Debt
+      // ยอดหนี้คงเหลือ = ยอดหนี้ดิบ - ยอดที่ชำระแล้ว
       const debtAmt   = Math.max(0, rawDebt - debtPaid);
-      const net       = totalPaid - debtAmt;
+      // ยอดสุทธิ = ยอดซื้อทั้งหมด (หน้าร้าน + ชำระหนี้) - หนี้คงเหลือ
+      const net       = (totalPaid + debtPaid) - debtAmt;
 
       if (s) {
         res.push({ ...s, debtAmount: debtAmt, debtItems: d ? d.items : [], netAmount: net });
