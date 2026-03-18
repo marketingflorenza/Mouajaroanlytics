@@ -403,6 +403,10 @@ const CRow = ({ row, i }) => {
           {row.debtPaid > 0 && <p style={{ fontSize:9, color:'#16a34a', fontWeight:700 }}>+{row.debtPaid.toLocaleString()} ชำระหนี้</p>}
         </td>
         <td className="px-5 py-4 text-right">
+          <p style={{ fontSize:15, fontWeight:900, color:'#7c3aed' }}>{(row.totalPaid + row.debtPaid).toLocaleString()}</p>
+          <p style={{ fontSize:8, color:'#a78bfa', fontWeight:700 }}>รวมทุกรายการ</p>
+        </td>
+        <td className="px-5 py-4 text-right">
           {row.debtAmount > 0
             ? <p style={{ fontSize:15, fontWeight:900, color:'#e11d48' }}>{row.debtAmount.toLocaleString()}</p>
             : <span style={{ color:'#e2e8f0', fontWeight:700 }}>—</span>}
@@ -427,7 +431,7 @@ const CRow = ({ row, i }) => {
       </tr>
       {exp && (
         <tr style={{ background:'#f8fafc' }}>
-          <td colSpan="9" style={{ padding:'0 40px 20px' }}>
+          <td colSpan="10" style={{ padding:'0 40px 20px' }}>
             <div className="slide-down">
               <ServiceTimeline history={row.serviceHistory || []} debtItems={row.debtItems || []} />
             </div>
@@ -555,11 +559,13 @@ const App = () => {
 
   const stats = useMemo(() =>
     filtered.reduce((a, c) => {
-      a.rev   += c.totalPaid;
-      a.debt  += c.debtAmount;
-      a.net   += c.netAmount;
-      a.mjInj += c.mounjaroInj;
-      a.mjRev += c.mounjaroPaid;
+      a.rev      += c.totalPaid;
+      a.debtPaid += c.debtPaid;
+      a.totalAll += c.totalPaid + c.debtPaid;
+      a.debt     += c.debtAmount;
+      a.net      += c.netAmount;
+      a.mjInj    += c.mounjaroInj;
+      a.mjRev    += c.mounjaroPaid;
       if (c.customerStatus === 'ใหม่') a.newC++; else a.oldC++;
       if (c.debtAmount  > 0) a.debtC++;
       if (c.hasMounjaro)     a.mjC++;
@@ -570,7 +576,7 @@ const App = () => {
         a.injBD[c.mounjaroInj] = (a.injBD[c.mounjaroInj] || 0) + 1;
       }
       return a;
-    }, { rev:0, debt:0, net:0, mjInj:0, mjRev:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
+    }, { rev:0, debtPaid:0, totalAll:0, debt:0, net:0, mjInj:0, mjRev:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
   [filtered]);
 
   const doSort = (k) => { if (srtK === k) { setSrtD(d => d === 'desc' ? 'asc' : 'desc'); } else { setSrtK(k); setSrtD('desc'); } };
@@ -592,7 +598,7 @@ const App = () => {
       'ประเภทลูกค้า': c.customerStatus === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า',
       'บริการที่ใช้': (c.itemTypesUsed || []).map(t => TM[t]?.label || t).join(', '),
       'ฉีด Mounjaro': c.mounjaroInj, 'ฉีด PEPTIDE': c.peptideInj, 'ฉีด ปากกา': c.pakaInj,
-      'ยอดซื้อรวม': c.totalPaid, 'ยอดชำระหนี้': c.debtPaid,
+      'ยอดซื้อรวม': c.totalPaid, 'ยอดชำระหนี้': c.debtPaid, 'ยอดซื้อทั้งหมด': c.totalPaid + c.debtPaid,
       'ยอดหนี้คงเหลือ': c.debtAmount, 'ยอดสุทธิ': c.netAmount,
       'บริการล่าสุด': fmt(c.lastDate),
       'ประวัติฉีด Mounjaro': c.mounjaroDates.map(d => `${d.dateStr}(${d.qty})`).join(', '),
@@ -629,8 +635,9 @@ const App = () => {
     t += `ฉีด Mounjaro:\t${stats.mjInj} ครั้ง\nลูกค้าใหม่:\t${stats.newC} คน\nลูกค้าเก่า:\t${stats.oldC} คน\n`;
     t += `-----------------------------\n`;
     t += `ยอดขาย Mounjaro:\t฿${stats.mjRev.toLocaleString()}\n`;
-    t += `ยอดขายรวมทั้งหมดรวม BL:\t฿${(stats.rev + stats.debt).toLocaleString()}\n`;
+    t += `ยอดซื้อทั้งหมด:\t฿${stats.totalAll.toLocaleString()}\n`;
     t += `ยอดชำระหน้าร้าน:\t฿${stats.rev.toLocaleString()}\n`;
+    t += `ยอดชำระหนี้สะสม:\t฿${stats.debtPaid.toLocaleString()}\n`;
     t += `ยอด BL คงเหลือ:\t฿${stats.debt.toLocaleString()}\n`;
     t += `ลูกค้ามีหนี้คงเหลือ:\t${stats.debtC} คน\n-----------------------------\n`;
     Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).forEach(([n, c]) => { t += `ฉีด ${n} ครั้ง: ${c} คน\n`; });
@@ -687,12 +694,13 @@ const App = () => {
         )}
 
         {/* ── Stats money ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:16 }}>
           {[
-            { label:'ยอดขายรวมทั้งหมดรวม BL', val:`${(stats.rev + stats.debt).toLocaleString()} ฿`, sub:null,                  bg:'#eff6ff', ic:'dollar', icbg:'#dbeafe', icc:'#2563eb', vc:'#0f172a' },
-            { label:'ยอดชำระหน้าร้าน',         val:`${stats.rev.toLocaleString()} ฿`,               sub:null,                  bg:'#f0fdf4', ic:'dollar', icbg:'#dcfce7', icc:'#16a34a', vc:'#16a34a' },
-            { label:'ยอด BL คงเหลือ',           val:`${stats.debt.toLocaleString()} ฿`,              sub:`${stats.debtC} คนที่มีหนี้คงค้าง`, bg:'#fff1f2', ic:'alert', icbg:'#ffe4e6', icc:'#e11d48', vc:'#e11d48' },
-          ].map(({ label, val, sub, bg, ic, icbg, icc, vc }) => (
+            { label:'ยอดซื้อทั้งหมด (รวมชำระหนี้)', val:`${stats.totalAll.toLocaleString()} ฿`, sub:null, ic:'dollar', icbg:'#ede9fe', icc:'#7c3aed', vc:'#7c3aed' },
+            { label:'ยอดชำระหน้าร้าน',               val:`${stats.rev.toLocaleString()} ฿`,      sub:null, ic:'dollar', icbg:'#dcfce7', icc:'#16a34a', vc:'#16a34a' },
+            { label:'ยอดชำระหนี้สะสม',               val:`${stats.debtPaid.toLocaleString()} ฿`, sub:null, ic:'check',  icbg:'#d1fae5', icc:'#059669', vc:'#059669' },
+            { label:'ยอด BL คงเหลือ',                val:`${stats.debt.toLocaleString()} ฿`,     sub:`${stats.debtC} คนที่มีหนี้คงค้าง`, ic:'alert', icbg:'#ffe4e6', icc:'#e11d48', vc:'#e11d48' },
+          ].map(({ label, val, sub, ic, icbg, icc, vc }) => (
             <div key={label} style={{ background:'white', padding:20, borderRadius:28, border:'1px solid #f1f5f9', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:16 }}>
               <div style={{ padding:12, background:icbg, borderRadius:16, color:icc, flexShrink:0 }}><Ic n={ic} s={26} /></div>
               <div>
@@ -771,13 +779,14 @@ const App = () => {
                     { k:'customerStatus', label:'ประเภท',            align:'center' },
                     { k:'mounjaroInj', label:'สรุปบริการ',            align:'left'  },
                     { k:'lastDate',    label:'บริการล่าสุด',           align:'center', blue:true },
-                    { k:'totalPaid',   label:'ยอดซื้อ',               align:'right' },
+                    { k:'totalPaid',   label:'ยอดซื้อ (หน้าร้าน)',    align:'right' },
+                    { k:'',            label:'ยอดซื้อทั้งหมด',        align:'right', purple:true },
                     { k:'debtAmount',  label:'ยอดหนี้คงเหลือ',        align:'right', red:true },
                     { k:'netAmount',   label:'ยอดสุทธิ',              align:'right', green:true },
                     { k:'',            label:'ประวัติ',               align:'center' },
-                  ].map(({ k, label, align, blue, red, green }, i) => (
+                  ].map(({ k, label, align, blue, red, green, purple }, i) => (
                     <th key={i} className={k ? 'sh' : ''} onClick={() => k && doSort(k)}
-                      style={{ padding:'16px 20px', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color: blue ? '#2563eb' : red ? '#e11d48' : green ? '#16a34a' : '#94a3b8', textAlign: align }}>
+                      style={{ padding:'16px 20px', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, color: blue ? '#2563eb' : red ? '#e11d48' : green ? '#16a34a' : purple ? '#7c3aed' : '#94a3b8', textAlign: align }}>
                       <div style={{ display:'flex', alignItems:'center', justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start' }}>
                         {label}{k && si(k)}
                       </div>
@@ -790,7 +799,7 @@ const App = () => {
                   ? filtered.map((row, i) => <CRow key={row.hn} row={row} i={i} />)
                   : (
                     <tr>
-                      <td colSpan="9" style={{ padding:'100px 0', textAlign:'center', color:'#cbd5e1', fontWeight:700, fontStyle:'italic' }}>
+                      <td colSpan="10" style={{ padding:'100px 0', textAlign:'center', color:'#cbd5e1', fontWeight:700, fontStyle:'italic' }}>
                         {ready ? 'ไม่พบข้อมูลตามเงื่อนไข' : 'กรุณาอัปโหลดไฟล์ Sales และ/หรือ Debt'}
                       </td>
                     </tr>
@@ -830,10 +839,11 @@ const App = () => {
               ))}
               <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:8 }}>
                 {[
-                  ['ยอดขาย Mounjaro',        `฿${stats.mjRev.toLocaleString()}`,                    '#eff6ff', '#1d4ed8'],
-                  ['ยอดขายรวมทั้งหมดรวม BL', `฿${(stats.rev + stats.debt).toLocaleString()}`,       '#f8fafc', '#0f172a'],
-                  ['ยอดชำระหน้าร้าน',        `฿${stats.rev.toLocaleString()}`,                      '#f0fdf4', '#16a34a'],
-                  ['ยอด BL คงเหลือ',          `฿${stats.debt.toLocaleString()}`,                     '#fff1f2', '#e11d48'],
+                  ['ยอดขาย Mounjaro',     `฿${stats.mjRev.toLocaleString()}`,     '#eff6ff', '#1d4ed8'],
+                  ['ยอดซื้อทั้งหมด',      `฿${stats.totalAll.toLocaleString()}`,  '#f5f3ff', '#7c3aed'],
+                  ['ยอดชำระหน้าร้าน',    `฿${stats.rev.toLocaleString()}`,        '#f0fdf4', '#16a34a'],
+                  ['ยอดชำระหนี้สะสม',    `฿${stats.debtPaid.toLocaleString()}`,   '#ecfdf5', '#059669'],
+                  ['ยอด BL คงเหลือ',      `฿${stats.debt.toLocaleString()}`,       '#fff1f2', '#e11d48'],
                 ].map(([l, v, bg, vc]) => (
                   <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderRadius:12, background:bg }}>
                     <span style={{ fontWeight:700, fontSize:14 }}>{l}</span>
@@ -931,11 +941,12 @@ const App = () => {
                         )}
                       </div>
                     </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:7, marginBottom:9 }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:7, marginBottom:9 }}>
                       {[
-                        { l:'ยอดขายรวมทั้งหมดรวม BL', v:`฿${(stats.rev + stats.debt).toLocaleString()}`, bg:'rgba(255,255,255,0.15)', vc:'white' },
-                        { l:'ยอดชำระหน้าร้าน',        v:`฿${stats.rev.toLocaleString()}`,               bg:'rgba(16,185,129,0.25)',  vc:'#6ee7b7' },
-                        { l:'ยอด BL คงเหลือ',          v:`฿${stats.debt.toLocaleString()}`,              bg:'rgba(244,63,94,0.28)',   vc:'#fda4af' },
+                        { l:'ยอดซื้อทั้งหมด',    v:`฿${stats.totalAll.toLocaleString()}`, bg:'rgba(167,139,250,0.25)', vc:'#ede9fe' },
+                        { l:'ยอดชำระหน้าร้าน',   v:`฿${stats.rev.toLocaleString()}`,      bg:'rgba(16,185,129,0.25)',  vc:'#6ee7b7' },
+                        { l:'ยอดชำระหนี้สะสม',   v:`฿${stats.debtPaid.toLocaleString()}`, bg:'rgba(52,211,153,0.2)',   vc:'#a7f3d0' },
+                        { l:'ยอด BL คงเหลือ',     v:`฿${stats.debt.toLocaleString()}`,     bg:'rgba(244,63,94,0.28)',   vc:'#fda4af' },
                       ].map(({ l, v, bg, vc }) => (
                         <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 12px' }}>
                           <div style={{ color:'rgba(255,255,255,0.5)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
