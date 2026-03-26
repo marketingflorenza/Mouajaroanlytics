@@ -60,6 +60,7 @@ const Ic = ({ n, s=18, c='' }) => {
     tag:     <><path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.41 0l7.29-7.29a1 1 0 0 0 0-1.41L12 2z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></>,
     img:     <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
     wallet:  <><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></>,
+    activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
   };
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24"
@@ -84,8 +85,8 @@ const getType = (item) => {
   const l = item.toLowerCase();
   if (l.includes('mounjaro') || l.includes('mouajaro') || l.includes('มอนจาโร')) return 'mounjaro';
   if (l.includes('peptide')  || l.includes('เปปไทด์')  || l.includes('คุมหิว'))  return 'peptide';
-  if (l.includes('ปากกา')   || l.includes('ลดน้ำหนัก'))                          return 'paka';
-  if (l.includes('slimnow')  || l.includes('สลิมนาว'))                            return 'slim';
+  if (l.includes('ปากกา')   || l.includes('ลดน้ำหนัก'))                           return 'paka';
+  if (l.includes('slimnow')  || l.includes('สลิมนาว'))                             return 'slim';
   return 'other';
 };
 
@@ -128,22 +129,41 @@ const parseSales = (rows) => {
     ptype:   fi(['ประเภทชำระ','ประเภท']),
   };
   const G = {};
+  const allSales = []; // เก็บรวบรวมยอดขายทั้งหมดเพื่อคิด %
+  
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[idx.hn]) continue;
-    const itemName = String(r[idx.item] || '');
-    if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
-    const hn      = normHN(r[idx.hn]);
-    const qty     = parseFloat(r[idx.qty]) || 0;
+    if (!r || r.length === 0) continue;
+    
+    // ตรวจสอบว่าแถวนี้มีวันที่หรือไม่ (กันแถวว่าง หรือแถวสรุปท้ายตาราง)
+    const rawDate = r[idx.date];
+    if (!rawDate) continue; 
+    
+    const sDate   = pDate(rawDate);
     const paid    = parseFloat(String(r[idx.paid] || '0').replace(/,/g, '')) || 0;
     const ptype   = String(r[idx.ptype] || '');
-    const sDate   = pDate(r[idx.date]);
+    const isDebtPay = ptype === 'ชำระหนี้';
+    
+    // 🔥 แก้ไขปัญหาที่ 1: เก็บยอดเงิน "ทั้งหมด" ทุกบรรทัดที่มีการชำระ
+    // (ไม่ว่าจะมี HN หรือไม่มี หรือเป็นบริการอื่นๆ ก็ตาม) เพื่อให้ยอดรวมตรงกับ Excel 100%
+    if (paid > 0) {
+        allSales.push({ date: sDate, paid });
+    }
+
+    // ถ้าไม่มี HN จะเอามาแมปตารางลูกค้ารายบุคคลไม่ได้ ให้ข้ามลงไป
+    if (!r[idx.hn]) continue;
+
+    const itemName = String(r[idx.item] || '');
+    if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
+    
+    const hn      = normHN(r[idx.hn]);
+    const qty     = parseFloat(r[idx.qty]) || 0;
     const regDate = pDate(r[idx.regDate]);
     const phone   = idx.phone !== -1 && r[idx.phone] ? String(r[idx.phone]).trim() : '-';
     const iType   = getType(itemName);
     const isMj    = iType === 'mounjaro';
     const isCourse  = itemName.toLowerCase().includes('[ตัดคอร์ส]');
-    const isDebtPay = ptype === 'ชำระหนี้';
+    
     if (!G[hn]) {
       G[hn] = {
         hn, name: String(r[idx.name] || '-'), phone, regDate,
@@ -162,11 +182,13 @@ const parseSales = (rows) => {
     if (sDate > g.lastDate) g.lastDate = sDate;
     g.itemTypesUsed.add(iType);
     g.serviceHistory.push({ date: sDate, dateStr: fmt(sDate), item: itemName, qty, paid, ptype, iType, isCourse, isDebtPay });
+    
     if (isDebtPay) {
       g.debtPaid += paid;
     } else {
       g.totalPaid += paid;
     }
+    
     if (isMj) {
       g.hasMounjaro = true;
       if (!isDebtPay) g.mounjaroPaid += paid;
@@ -186,7 +208,7 @@ const parseSales = (rows) => {
     g.mounjaroDates.sort((a, b) => b.dateObj - a.dateObj);
     g.itemTypesUsed = Array.from(g.itemTypesUsed);
   });
-  return G;
+  return { customers: G, allSales };
 };
 
 /* ── Parse Debt (NEW LOGIC: Tracks running balance per item) ── */
@@ -552,18 +574,19 @@ const App = () => {
     });
   };
 
+  // ดึงยอดชำระของลูกค้าที่เราฟิลเตอร์มาทำตาราง
   const merged = useMemo(() => {
-    const all = new Set([...Object.keys(salesData || {}), ...Object.keys(debtData || {})]);
+    const sCust = salesData?.customers || {};
+    const dCust = debtData || {};
+    const all = new Set([...Object.keys(sCust), ...Object.keys(dCust)]);
     const res = [];
     all.forEach(hn => {
-      const s = salesData?.[hn];
-      const d = debtData?.[hn];
+      const s = sCust[hn];
+      const d = dCust[hn];
       
-      // ตอนนี้ debtAmt มาจากฟิลเตอร์เฉพาะ Mounjaro/Peptide/ปากกา ล้วนๆ แล้ว
       const debtAmt   = d ? d.totalDebt : 0;
       const totalPaid = s ? s.totalPaid : 0;
       const debtPaid  = s ? s.debtPaid  : 0;
-      
       const totalPurchase = totalPaid + debtPaid + debtAmt;
       
       if (s) {
@@ -582,6 +605,22 @@ const App = () => {
     });
     return res;
   }, [salesData, debtData]);
+
+  // คำนวณยอดขาย "รวมของทั้งคลินิก" อิงตาม Date Filter 
+  const clinicTotalSales = useMemo(() => {
+    if (!salesData || !salesData.allSales) return 0;
+    const s = startD ? new Date(startD) : null;
+    const e = endD   ? new Date(endD)   : null;
+    if (s) s.setHours(0, 0, 0, 0);
+    if (e) e.setHours(23, 59, 59, 999);
+
+    return salesData.allSales.reduce((sum, txn) => {
+      let md = true;
+      if (s) md = md && txn.date >= s;
+      if (e) md = md && txn.date <= e;
+      return md ? sum + txn.paid : sum;
+    }, 0);
+  }, [salesData, startD, endD]);
 
   const filtered = useMemo(() => {
     const s = startD ? new Date(startD) : null;
@@ -634,6 +673,9 @@ const App = () => {
       return a;
     }, { totalPurchase:0, firstPay:0, blPay:0, outstanding:0, mjInj:0, mjRev:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
   [filtered]);
+
+  // คำนวณ % Mounjaro เทียบกับยอดหน้าร้านรวมทั้งคลินิก (clinicTotalSales)
+  const mjPercent = clinicTotalSales > 0 ? ((stats.mjRev / clinicTotalSales) * 100).toFixed(1) : 0;
 
   const doSort = (k) => { if (srtK === k) { setSrtD(d => d === 'desc' ? 'asc' : 'desc'); } else { setSrtK(k); setSrtD('desc'); } };
   const si = (k) => {
@@ -692,9 +734,11 @@ const App = () => {
     t += `ลูกค้า Mounjaro:\t${stats.mjC} คน\nลูกค้า PEPTIDE:\t${stats.pepC} คน\nลูกค้าปากกา:\t${stats.pakaC} คน\n`;
     t += `ฉีด Mounjaro:\t${stats.mjInj} ครั้ง\nลูกค้าใหม่:\t${stats.newC} คน\nลูกค้าเก่า:\t${stats.oldC} คน\n`;
     t += `-----------------------------\n`;
-    t += `ยอดขาย Mounjaro:\t฿${stats.mjRev.toLocaleString()}\n`;
-    t += `ยอดซื้อรวม:\t฿${stats.totalPurchase.toLocaleString()}\n`;
-    t += `ยอดชำระครั้งแรก:\t฿${stats.firstPay.toLocaleString()}\n`;
+    t += `ยอดรับรวมคลินิก:\t฿${clinicTotalSales.toLocaleString()}\n`;
+    t += `ยอดขาย Mounjaro:\t฿${stats.mjRev.toLocaleString()} (${mjPercent}%)\n`;
+    t += `-----------------------------\n`;
+    t += `ยอดชำระรวม (เป้าหมาย):\t฿${stats.totalPurchase.toLocaleString()}\n`;
+    t += `ยอดชำระหน้าร้าน (เป้าหมาย):\t฿${stats.firstPay.toLocaleString()}\n`;
     t += `ยอดชำระ BL:\t฿${stats.blPay.toLocaleString()}\n`;
     t += `ยอดค้างชำระ:\t฿${stats.outstanding.toLocaleString()}\n`;
     t += `ลูกค้ามีหนี้:\t${stats.debtC} คน\n-----------------------------\n`;
@@ -751,25 +795,44 @@ const App = () => {
           </div>
         )}
 
+        {/* ── Highlight Banner for Total Clinic ── */}
+        {ready && (
+          <div style={{ display:'flex', gap:14, marginBottom:16 }}>
+            <div style={{ flex:1, background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', padding:'22px 28px', borderRadius:28, color:'white', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 15px rgba(59,130,246,0.3)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+                 <div style={{ padding:14, background:'rgba(255,255,255,0.15)', borderRadius:16, color:'white' }}><Ic n="activity" s={28} /></div>
+                 <div>
+                   <p style={{ fontSize:11, fontWeight:900, textTransform:'uppercase', letterSpacing:1.5, opacity:0.8, margin:0 }}>ยอดรับรวมทั้งคลินิก (จากไฟล์ตามช่วงเวลา)</p>
+                   <h2 style={{ fontSize:32, fontWeight:900, margin:'4px 0 0', lineHeight:1 }}>฿{clinicTotalSales.toLocaleString()}</h2>
+                 </div>
+              </div>
+              <div style={{ textAlign:'right', background:'rgba(0,0,0,0.2)', padding:'14px 20px', borderRadius:20 }}>
+                 <p style={{ fontSize:10, fontWeight:900, textTransform:'uppercase', letterSpacing:1, opacity:0.8, margin:0 }}>สัดส่วนยอดขาย Mounjaro</p>
+                 <h2 style={{ fontSize:28, fontWeight:900, margin:'4px 0 0', color:'#93c5fd', lineHeight:1 }}>{mjPercent}%</h2>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── 4 Stats Cards ── */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:16 }}>
           {[
             {
-              label: 'ยอดซื้อรวม',
+              label: 'ยอดซื้อรวม(เป้าหมาย)',
               val: `${stats.totalPurchase.toLocaleString()} ฿`,
-              sub: 'ชำระครั้งแรก + ชำระ BL + ค้างชำระ',
+              sub: 'ชำระหน้าร้าน + ชำระ BL + ค้างชำระ',
               bg: '#eff6ff', ic: 'dollar', icbg: '#dbeafe', icc: '#2563eb', vc: '#0f172a',
               border: '#bfdbfe',
             },
             {
-              label: 'ยอดชำระครั้งแรก',
+              label: 'ชำระหน้าร้าน(เป้าหมาย)',
               val: `${stats.firstPay.toLocaleString()} ฿`,
-              sub: 'ชำระปกติ (หน้าร้าน)',
+              sub: 'ยอดชำระปกติ (หน้าร้าน)',
               bg: '#f0fdf4', ic: 'wallet', icbg: '#dcfce7', icc: '#16a34a', vc: '#16a34a',
               border: '#bbf7d0',
             },
             {
-              label: 'ยอดชำระ BL',
+              label: 'ยอดชำระ BL (เป้าหมาย)',
               val: `${stats.blPay.toLocaleString()} ฿`,
               sub: 'ชำระหนี้ที่บันทึกในระบบ',
               bg: '#f5f3ff', ic: 'check', icbg: '#ede9fe', icc: '#7c3aed', vc: '#7c3aed',
@@ -796,7 +859,7 @@ const App = () => {
               <div style={{ minWidth:0 }}>
                 <span style={{ fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1.5, color:'#94a3b8', display:'block', lineHeight:1.4 }}>{label}</span>
                 <h3 style={{ fontSize:19, fontWeight:900, color:vc, margin:'2px 0 1px', lineHeight:1 }}>{val}</h3>
-                {sub && <p style={{ fontSize:9, color:'#94a3b8', fontWeight:700, margin:0 }}>{sub}</p>}
+                <p style={{ fontSize:9, color:'#94a3b8', fontWeight:700, margin:0 }}>{sub}</p>
               </div>
             </div>
           ))}
@@ -840,7 +903,7 @@ const App = () => {
               <span style={{ position:'absolute', top:-8, left:12, background:'white', padding:'0 4px', fontSize:8, fontWeight:900, color:'#94a3b8', textTransform:'uppercase' }}>ค้นหา</span>
             </div>
             <button onClick={() => setDebtOnly(v => !v)}
-              style={{ padding:'12px', borderRadius:12, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', gap:6, border:`1px solid ${debtOnly ? '#e11d48' : '#fecdd3'}`, background: debtOnly ? '#e11d48' : 'white', color: debtOnly ? 'white' : '#e11d48', cursor:'pointer' }}>
+              style={{ padding:'12px', borderRadius:12, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', justifyItems:'center', justifyContent:'center', gap:6, border:`1px solid ${debtOnly ? '#e11d48' : '#fecdd3'}`, background: debtOnly ? '#e11d48' : 'white', color: debtOnly ? 'white' : '#e11d48', cursor:'pointer' }}>
               <Ic n="alert" s={14} />{debtOnly ? '✓ เฉพาะมีหนี้' : 'เฉพาะมีหนี้'}
             </button>
           </div>
@@ -913,7 +976,7 @@ const App = () => {
             </div>
             <div>
               {[
-                ['ลูกค้าทั้งหมด',       `${filtered.length} คน`, '#0f172a'],
+                ['ลูกค้าทั้งหมด (เป้าหมาย)', `${filtered.length} คน`, '#0f172a'],
                 ['ลูกค้า Mounjaro',     `${stats.mjC} คน`,        '#2563eb'],
                 ['ลูกค้า PEPTIDE',      `${stats.pepC} คน`,       '#16a34a'],
                 ['ลูกค้าปากกา',         `${stats.pakaC} คน`,      '#9333ea'],
@@ -928,13 +991,13 @@ const App = () => {
                 </div>
               ))}
               <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:8 }}>
-                {/* 4 ยอดใหม่ */}
+                {/* ยอดเงินต่างๆ */}
                 {[
-                  ['ยอดซื้อรวม',                `฿${stats.totalPurchase.toLocaleString()}`, '#eff6ff', '#0f172a', '#bfdbfe'],
-                  ['ยอดชำระครั้งแรก',             `฿${stats.firstPay.toLocaleString()}`, '#f0fdf4', '#16a34a', '#bbf7d0'],
-                  ['ยอดชำระ BL',                  `฿${stats.blPay.toLocaleString()}`,    '#f5f3ff', '#7c3aed', '#ddd6fe'],
+                  ['ยอดรับรวมทั้งคลินิก',          `฿${clinicTotalSales.toLocaleString()}`, '#f8fafc', '#0f172a', '#e2e8f0'],
+                  ['ยอดขาย Mounjaro (หน้าร้าน)',  `฿${stats.mjRev.toLocaleString()} (${mjPercent}%)`,    '#eff6ff', '#1d4ed8', '#bfdbfe'],
+                  ['ยอดซื้อรวม (เป้าหมาย)',                 `฿${stats.totalPurchase.toLocaleString()}`, '#ffffff', '#475569', '#f1f5f9'],
+                  ['ยอดชำระ BL',                 `฿${stats.blPay.toLocaleString()}`,    '#f5f3ff', '#7c3aed', '#ddd6fe'],
                   ['ยอดค้างชำระ',                 `฿${stats.outstanding.toLocaleString()}`, '#fff1f2', '#e11d48', '#fecdd3'],
-                  ['ยอดขาย Mounjaro',             `฿${stats.mjRev.toLocaleString()}`,    '#eff6ff', '#1d4ed8', '#bfdbfe'],
                 ].map(([l, v, bg, vc, bd]) => (
                   <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderRadius:12, background:bg, border:`1px solid ${bd}` }}>
                     <span style={{ fontWeight:700, fontSize:13 }}>{l}</span>
@@ -972,7 +1035,7 @@ const App = () => {
       {/* ── Export Image Modal ── */}
       {imgModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
-          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:520, position:'relative', maxHeight:'95vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
+          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:560, position:'relative', maxHeight:'95vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
             <div style={{ position:'sticky', top:0, background:'white', borderRadius:'28px 28px 0 0', padding:'20px 24px 16px', borderBottom:'1px solid #f1f5f9', zIndex:10 }}>
               <button onClick={() => setImgModal(false)} style={{ position:'absolute', top:16, right:16, background:'#f8fafc', border:'none', borderRadius:'50%', padding:8, cursor:'pointer', color:'#94a3b8' }}>
                 <Ic n="x" s={18} />
@@ -1033,17 +1096,19 @@ const App = () => {
                       </div>
                     </div>
 
-                    {/* 4 Money Stats */}
+                    {/* 6 Money Stats (Added Clinic Total & Mounjaro %) */}
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:9 }}>
                       {[
-                        { l:'ยอดซื้อรวม',         v:`฿${stats.totalPurchase.toLocaleString()}`, bg:'rgba(255,255,255,0.18)', vc:'white' },
-                        { l:'ยอดชำระครั้งแรก',    v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',  vc:'#6ee7b7' },
-                        { l:'ยอดชำระ BL',         v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)', vc:'#ddd6fe' },
-                        { l:'ยอดค้างชำระ',        v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)',  vc:'#fda4af' },
+                        { l:'ยอดรับรวมทั้งคลินิก',   v:`฿${clinicTotalSales.toLocaleString()}`, bg:'rgba(245,158,11,0.25)', vc:'#fcd34d' },
+                        { l:'สัดส่วน Mounjaro', v:`${mjPercent}%`, bg:'rgba(59,130,246,0.3)', vc:'#93c5fd' },
+                        { l:'ซื้อรวม (เป้าหมาย)',   v:`฿${stats.totalPurchase.toLocaleString()}`, bg:'rgba(255,255,255,0.18)', vc:'white' },
+                        { l:'ชำระหน้าร้าน (เป้าหมาย)', v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',  vc:'#6ee7b7' },
+                        { l:'ชำระ BL (เป้าหมาย)',   v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)', vc:'#ddd6fe' },
+                        { l:'ค้างชำระ (เป้าหมาย)',  v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)',  vc:'#fda4af' },
                       ].map(({ l, v, bg, vc }) => (
                         <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 13px' }}>
-                          <div style={{ color:'rgba(255,255,255,0.55)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
-                          <div style={{ color:vc, fontSize:16, fontWeight:900 }}>{v}</div>
+                          <div style={{ color:'rgba(255,255,255,0.65)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
+                          <div style={{ color:vc, fontSize:15, fontWeight:900 }}>{v}</div>
                         </div>
                       ))}
                     </div>
@@ -1071,7 +1136,7 @@ const App = () => {
                     <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:12, padding:'11px 14px', marginBottom:9 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
                         <span style={{ color:'rgba(255,255,255,0.65)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>💉 Mounjaro</span>
-                        <span style={{ color:'#93c5fd', fontSize:9, fontWeight:700 }}>฿{stats.mjRev.toLocaleString()}</span>
+                        <span style={{ color:'#93c5fd', fontSize:9, fontWeight:700 }}>฿{stats.mjRev.toLocaleString()} ({mjPercent}%)</span>
                       </div>
                       <div style={{ color:'white', fontSize:12, fontWeight:800 }}>
                         ฉีดทั้งหมด <span style={{ fontSize:22, color:'#60a5fa', fontWeight:900 }}>{stats.mjInj}</span> ครั้ง
