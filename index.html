@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Mounjaro Dashboard v4 (Exclusive Debt Filter)</title>
+<title>Mounjaro Dashboard v5 (Full Payment)</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -61,6 +61,8 @@ const Ic = ({ n, s=18, c='' }) => {
     img:     <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
     wallet:  <><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></>,
     activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
+    /* ✦ NEW: cash icon for ยอดชำระตอนนี้ */
+    cash:    <><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></>,
   };
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24"
@@ -129,30 +131,19 @@ const parseSales = (rows) => {
     ptype:   fi(['ประเภทชำระ','ประเภท']),
   };
   const G = {};
-  const allSales = []; // เก็บรวบรวมยอดขายทั้งหมดเพื่อคิด %
+  const allSales = [];
   
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || r.length === 0) continue;
-    
-    // ตรวจสอบว่าแถวนี้มีวันที่หรือไม่ (กันแถวว่าง หรือแถวสรุปท้ายตาราง)
     const rawDate = r[idx.date];
-    if (!rawDate) continue; 
-    
+    if (!rawDate) continue;
     const sDate   = pDate(rawDate);
     const paid    = parseFloat(String(r[idx.paid] || '0').replace(/,/g, '')) || 0;
     const ptype   = String(r[idx.ptype] || '');
     const isDebtPay = ptype === 'ชำระหนี้';
-    
-    // 🔥 แก้ไขปัญหาที่ 1: เก็บยอดเงิน "ทั้งหมด" ทุกบรรทัดที่มีการชำระ
-    // (ไม่ว่าจะมี HN หรือไม่มี หรือเป็นบริการอื่นๆ ก็ตาม) เพื่อให้ยอดรวมตรงกับ Excel 100%
-    if (paid > 0) {
-        allSales.push({ date: sDate, paid });
-    }
-
-    // ถ้าไม่มี HN จะเอามาแมปตารางลูกค้ารายบุคคลไม่ได้ ให้ข้ามลงไป
+    if (paid > 0) allSales.push({ date: sDate, paid });
     if (!r[idx.hn]) continue;
-
     const itemName = String(r[idx.item] || '');
     if (!KW.some(k => itemName.toLowerCase().includes(k.toLowerCase()))) continue;
     
@@ -170,7 +161,12 @@ const parseSales = (rows) => {
         lastDate: sDate,
         totalPaid: 0,
         debtPaid: 0,
-        mounjaroInj: 0, mounjaroPaid: 0, mounjaroDates: [],
+        mounjaroInj: 0,
+        /* ✦ CHANGED: แยกเก็บ mounjaroPaidNormal และ mounjaroPaidDebt */
+        mounjaroPaidNormal: 0,
+        mounjaroPaidDebt: 0,
+        mounjaroPaid: 0,   /* รวมทั้งคู่ */
+        mounjaroDates: [],
         peptideInj: 0, pakaInj: 0,
         hasMounjaro: false, hasPeptide: false, hasPaka: false,
         serviceHistory: [], itemTypesUsed: new Set(),
@@ -191,7 +187,14 @@ const parseSales = (rows) => {
     
     if (isMj) {
       g.hasMounjaro = true;
-      if (!isDebtPay) g.mounjaroPaid += paid;
+      /* ✦ CHANGED: นับยอด Mounjaro ทั้ง ชำระปกติ และ ชำระหนี้ */
+      if (isDebtPay) {
+        g.mounjaroPaidDebt += paid;
+      } else {
+        g.mounjaroPaidNormal += paid;
+      }
+      g.mounjaroPaid += paid; /* รวมทั้งคู่ */
+
       if (isCourse) {
         const injQty = Math.round(qty);
         if (injQty > 0) {
@@ -211,7 +214,7 @@ const parseSales = (rows) => {
   return { customers: G, allSales };
 };
 
-/* ── Parse Debt (NEW LOGIC: Tracks running balance per item) ── */
+/* ── Parse Debt ── */
 const parseDebt = (rows) => {
   const H = rows[0].map(h => String(h || '').trim());
   const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
@@ -229,22 +232,13 @@ const parseDebt = (rows) => {
 
   const commit = () => {
     if (!curHN || customerItems.length === 0) return;
-    
-    // กรองเฉพาะรายการที่เป็น Mounjaro / Peptide / ปากกา
     const kwItems = customerItems.filter(ci => 
       KW.some(k => ci.name.toLowerCase().includes(k.toLowerCase()))
     );
-    
-    // คำนวณยอดรวมหนี้เฉพาะของรายการ Keyword
     const kwDebt = kwItems.reduce((sum, ci) => sum + ci.balance, 0);
-    
     if (!D[curHN]) D[curHN] = { hn: curHN, name: curName, phone: curPhone, totalDebt: 0, items: [] };
-    
-    // ตั้งค่า totalDebt เป็นหนี้ของรายการที่สนใจเท่านั้น
     D[curHN].totalDebt = kwDebt;
-    
     if (kwDebt > 0) {
-      // ดึงเฉพาะรายการที่มียอดคงเหลือ > 0 ไปแสดงผล
       D[curHN].items.push(...kwItems.filter(ci => ci.balance > 0).map(ci => ({
         item: ci.name,
         amount: ci.balance,
@@ -259,8 +253,6 @@ const parseDebt = (rows) => {
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || r.length === 0) continue;
-
-    // ─ แถว "รวม" ─
     if (r.some(val => String(val).trim() === 'รวม')) {
       commit();
       curHN = null; curName = null; curPhone = null;
@@ -268,10 +260,7 @@ const parseDebt = (rows) => {
       activeItem = null;
       continue;
     }
-
     const col1 = String(r[idx.name > -1 ? idx.name : 1] || '').trim();
-
-    // ─ แถว header ลูกค้า ─
     if (col1 && col1.includes('/')) {
       commit(); 
       const parts = col1.split('/');
@@ -282,10 +271,7 @@ const parseDebt = (rows) => {
       activeItem = null;
       continue;
     }
-
     if (!curHN) continue;
-
-    // ─ แถวรายการ / ชำระเงิน ─
     const itemName = String(r[idx.item > -1 ? idx.item : 3] || r[1] || '').trim();
     const amtCol = idx.amount > -1 ? idx.amount : (r.length - 1);
     const amtStr = String(r[amtCol] || '0').replace(/,/g, '');
@@ -293,26 +279,15 @@ const parseDebt = (rows) => {
     const dCol = idx.date > -1 ? idx.date : 5;
     const date = pDate(r[dCol]);
     const statusStr = idx.status !== -1 ? String(r[idx.status] || '') : '';
-
     if (itemName) {
-      // แถวตั้งหนี้ใหม่ (มีชื่อรายการ)
-      activeItem = { 
-        name: itemName, 
-        balance: amt, 
-        status: statusStr || 'ค้างชำระ', 
-        date, 
-        dateStr: fmt(date) 
-      };
+      activeItem = { name: itemName, balance: amt, status: statusStr || 'ค้างชำระ', date, dateStr: fmt(date) };
       customerItems.push(activeItem);
     } else if (activeItem) {
-      // แถวชำระเงินของรายการที่ active อยู่
       activeItem.balance = amt;
-      if (statusStr && statusStr !== '-' && statusStr !== 'ค้างชำระ') {
-        activeItem.status = statusStr;
-      }
+      if (statusStr && statusStr !== '-' && statusStr !== 'ค้างชำระ') activeItem.status = statusStr;
     }
   }
-  commit(); // Commit ลูกค้ารายสุดท้าย
+  commit();
   return D;
 };
 
@@ -332,17 +307,13 @@ const UpZone = ({ label, sub, done, fname, onFile }) => {
       <input ref={ref} type="file" style={{ display:'none' }} accept=".xlsx,.xls,.csv"
         onChange={e => { if (e.target.files[0]) onFile(e.target.files[0]); e.target.value = ''; }} />
       {done ? (
-        <>
-          <Ic n="check" s={26} c="text-emerald-500" />
+        <><Ic n="check" s={26} c="text-emerald-500" />
           <p className="font-black text-emerald-700 text-sm">{label}</p>
-          <p className="text-xs text-emerald-500 truncate max-w-xs">{fname}</p>
-        </>
+          <p className="text-xs text-emerald-500 truncate max-w-xs">{fname}</p></>
       ) : (
-        <>
-          <Ic n="upload" s={26} c="text-slate-400" />
+        <><Ic n="upload" s={26} c="text-slate-400" />
           <p className="font-black text-slate-600 text-sm text-center">{label}</p>
-          <p className="text-xs text-slate-400 text-center">{sub}</p>
-        </>
+          <p className="text-xs text-slate-400 text-center">{sub}</p></>
       )}
     </div>
   );
@@ -574,7 +545,6 @@ const App = () => {
     });
   };
 
-  // ดึงยอดชำระของลูกค้าที่เราฟิลเตอร์มาทำตาราง
   const merged = useMemo(() => {
     const sCust = salesData?.customers || {};
     const dCust = debtData || {};
@@ -583,19 +553,18 @@ const App = () => {
     all.forEach(hn => {
       const s = sCust[hn];
       const d = dCust[hn];
-      
       const debtAmt   = d ? d.totalDebt : 0;
       const totalPaid = s ? s.totalPaid : 0;
       const debtPaid  = s ? s.debtPaid  : 0;
       const totalPurchase = totalPaid + debtPaid + debtAmt;
-      
       if (s) {
         res.push({ ...s, debtAmount: debtAmt, debtItems: d ? d.items : [], totalPurchase });
       } else if (d) {
         res.push({
           hn, name: d.name, phone: d.phone, regDate: new Date(0),
           lastDate: d.items[0]?.date || new Date(0),
-          totalPaid: 0, debtPaid: 0, mounjaroInj: 0, mounjaroPaid: 0,
+          totalPaid: 0, debtPaid: 0,
+          mounjaroInj: 0, mounjaroPaid: 0, mounjaroPaidNormal: 0, mounjaroPaidDebt: 0,
           mounjaroDates: [], peptideInj: 0, pakaInj: 0,
           hasMounjaro: false, hasPeptide: false, hasPaka: false,
           serviceHistory: [], itemTypesUsed: ['other'],
@@ -606,14 +575,12 @@ const App = () => {
     return res;
   }, [salesData, debtData]);
 
-  // คำนวณยอดขาย "รวมของทั้งคลินิก" อิงตาม Date Filter 
   const clinicTotalSales = useMemo(() => {
     if (!salesData || !salesData.allSales) return 0;
     const s = startD ? new Date(startD) : null;
     const e = endD   ? new Date(endD)   : null;
     if (s) s.setHours(0, 0, 0, 0);
     if (e) e.setHours(23, 59, 59, 999);
-
     return salesData.allSales.reduce((sum, txn) => {
       let md = true;
       if (s) md = md && txn.date >= s;
@@ -660,7 +627,10 @@ const App = () => {
       a.blPay     += c.debtPaid;
       a.outstanding += c.debtAmount;
       a.mjInj     += c.mounjaroInj;
-      a.mjRev     += c.mounjaroPaid;
+      /* ✦ CHANGED: mjRev ใช้ mounjaroPaid ซึ่งรวม ชำระปกติ + ชำระหนี้ แล้ว */
+      a.mjRev     += (c.mounjaroPaid || 0);
+      a.mjRevNormal += (c.mounjaroPaidNormal || 0);
+      a.mjRevDebt   += (c.mounjaroPaidDebt   || 0);
       if (c.customerStatus === 'ใหม่') a.newC++; else a.oldC++;
       if (c.debtAmount  > 0) a.debtC++;
       if (c.hasMounjaro)     a.mjC++;
@@ -671,11 +641,14 @@ const App = () => {
         a.injBD[c.mounjaroInj] = (a.injBD[c.mounjaroInj] || 0) + 1;
       }
       return a;
-    }, { totalPurchase:0, firstPay:0, blPay:0, outstanding:0, mjInj:0, mjRev:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
+    }, { totalPurchase:0, firstPay:0, blPay:0, outstanding:0, mjInj:0, mjRev:0, mjRevNormal:0, mjRevDebt:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
   [filtered]);
 
-  // คำนวณ % Mounjaro เทียบกับยอดหน้าร้านรวมทั้งคลินิก (clinicTotalSales)
+  /* ✦ NEW: ยอดชำระตอนนี้ = ชำระปกติ + ชำระ BL */
+  const nowPay = stats.firstPay + stats.blPay;
+
   const mjPercent = clinicTotalSales > 0 ? ((stats.mjRev / clinicTotalSales) * 100).toFixed(1) : 0;
+  const nowPayPct = stats.totalPurchase > 0 ? ((nowPay / stats.totalPurchase) * 100).toFixed(1) : 0;
 
   const doSort = (k) => { if (srtK === k) { setSrtD(d => d === 'desc' ? 'asc' : 'desc'); } else { setSrtK(k); setSrtD('desc'); } };
   const si = (k) => {
@@ -697,9 +670,13 @@ const App = () => {
       'บริการที่ใช้': (c.itemTypesUsed || []).map(t => TM[t]?.label || t).join(', '),
       'ฉีด Mounjaro': c.mounjaroInj, 'ฉีด PEPTIDE': c.peptideInj, 'ฉีด ปากกา': c.pakaInj,
       'ยอดซื้อรวม': c.totalPurchase,
-      'ยอดชำระครั้งแรก': c.totalPaid,
+      'ยอดชำระตอนนี้': (c.totalPaid || 0) + (c.debtPaid || 0),
+      'ยอดชำระปกติ': c.totalPaid,
       'ยอดชำระ BL': c.debtPaid,
       'ยอดค้างชำระ': c.debtAmount,
+      'ยอดขาย Mounjaro (รวม)': c.mounjaroPaid || 0,
+      'ยอดขาย Mounjaro (ปกติ)': c.mounjaroPaidNormal || 0,
+      'ยอดขาย Mounjaro (BL)': c.mounjaroPaidDebt || 0,
       'บริการล่าสุด': fmt(c.lastDate),
       'ประวัติฉีด Mounjaro': c.mounjaroDates.map(d => `${d.dateStr}(${d.qty})`).join(', '),
       'รายการหนี้': c.debtItems.map(d => `${d.item}(${d.amount.toLocaleString()}฿)`).join(' | '),
@@ -735,10 +712,13 @@ const App = () => {
     t += `ฉีด Mounjaro:\t${stats.mjInj} ครั้ง\nลูกค้าใหม่:\t${stats.newC} คน\nลูกค้าเก่า:\t${stats.oldC} คน\n`;
     t += `-----------------------------\n`;
     t += `ยอดรับรวมคลินิก:\t฿${clinicTotalSales.toLocaleString()}\n`;
-    t += `ยอดขาย Mounjaro:\t฿${stats.mjRev.toLocaleString()} (${mjPercent}%)\n`;
+    t += `ยอดขาย Mounjaro (รวม):\t฿${stats.mjRev.toLocaleString()} (${mjPercent}%)\n`;
+    t += `  - ชำระปกติ:\t฿${stats.mjRevNormal.toLocaleString()}\n`;
+    t += `  - ชำระ BL:\t฿${stats.mjRevDebt.toLocaleString()}\n`;
     t += `-----------------------------\n`;
-    t += `ยอดชำระรวม (เป้าหมาย):\t฿${stats.totalPurchase.toLocaleString()}\n`;
-    t += `ยอดชำระหน้าร้าน (เป้าหมาย):\t฿${stats.firstPay.toLocaleString()}\n`;
+    t += `ยอดชำระตอนนี้:\t฿${nowPay.toLocaleString()} (${nowPayPct}%)\n`;
+    t += `ยอดซื้อรวม (เป้าหมาย):\t฿${stats.totalPurchase.toLocaleString()}\n`;
+    t += `ยอดชำระหน้าร้าน:\t฿${stats.firstPay.toLocaleString()}\n`;
     t += `ยอดชำระ BL:\t฿${stats.blPay.toLocaleString()}\n`;
     t += `ยอดค้างชำระ:\t฿${stats.outstanding.toLocaleString()}\n`;
     t += `ลูกค้ามีหนี้:\t${stats.debtC} คน\n-----------------------------\n`;
@@ -787,7 +767,6 @@ const App = () => {
           <UpZone label="② ไฟล์ยอดหนี้ (Debtors)"  sub="อัปโหลดไฟล์รายงานลูกหนี้ Florenza Clinic"  done={!!debtData}  fname={dFile} onFile={handleDebt} />
         </div>
 
-        {/* Errors */}
         {(sErr || dErr) && (
           <div style={{ marginBottom:20 }}>
             {sErr && <div className="p-3 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-r-xl text-sm font-bold flex items-center gap-2 mb-2"><Ic n="alert" s={14} />{sErr}</div>}
@@ -795,27 +774,58 @@ const App = () => {
           </div>
         )}
 
-        {/* ── Highlight Banner for Total Clinic ── */}
+        {/* ── Highlight Banner ── */}
         {ready && (
           <div style={{ display:'flex', gap:14, marginBottom:16 }}>
             <div style={{ flex:1, background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', padding:'22px 28px', borderRadius:28, color:'white', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 15px rgba(59,130,246,0.3)' }}>
               <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-                 <div style={{ padding:14, background:'rgba(255,255,255,0.15)', borderRadius:16, color:'white' }}><Ic n="activity" s={28} /></div>
-                 <div>
-                   <p style={{ fontSize:11, fontWeight:900, textTransform:'uppercase', letterSpacing:1.5, opacity:0.8, margin:0 }}>ยอดรับรวมทั้งคลินิก (จากไฟล์ตามช่วงเวลา)</p>
-                   <h2 style={{ fontSize:32, fontWeight:900, margin:'4px 0 0', lineHeight:1 }}>฿{clinicTotalSales.toLocaleString()}</h2>
-                 </div>
+                <div style={{ padding:14, background:'rgba(255,255,255,0.15)', borderRadius:16, color:'white' }}><Ic n="activity" s={28} /></div>
+                <div>
+                  <p style={{ fontSize:11, fontWeight:900, textTransform:'uppercase', letterSpacing:1.5, opacity:0.8, margin:0 }}>ยอดรับรวมทั้งคลินิก (จากไฟล์ตามช่วงเวลา)</p>
+                  <h2 style={{ fontSize:32, fontWeight:900, margin:'4px 0 0', lineHeight:1 }}>฿{clinicTotalSales.toLocaleString()}</h2>
+                </div>
               </div>
               <div style={{ textAlign:'right', background:'rgba(0,0,0,0.2)', padding:'14px 20px', borderRadius:20 }}>
-                 <p style={{ fontSize:10, fontWeight:900, textTransform:'uppercase', letterSpacing:1, opacity:0.8, margin:0 }}>สัดส่วนยอดขาย Mounjaro</p>
-                 <h2 style={{ fontSize:28, fontWeight:900, margin:'4px 0 0', color:'#93c5fd', lineHeight:1 }}>{mjPercent}%</h2>
+                <p style={{ fontSize:10, fontWeight:900, textTransform:'uppercase', letterSpacing:1, opacity:0.8, margin:0 }}>สัดส่วนยอดขาย Mounjaro</p>
+                <h2 style={{ fontSize:28, fontWeight:900, margin:'4px 0 0', color:'#93c5fd', lineHeight:1 }}>{mjPercent}%</h2>
+                <p style={{ fontSize:9, opacity:0.6, margin:'2px 0 0' }}>ชำระปกติ + ชำระหนี้</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── 4 Stats Cards ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:16 }}>
+        {/* ── 5 Stats Cards (เพิ่ม ยอดชำระตอนนี้) ── */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:14, marginBottom:16 }}>
+
+          {/* ✦ NEW CARD: ยอดชำระตอนนี้ */}
+          <div style={{
+            background:'white', padding:18, borderRadius:28,
+            border:'1px solid #fde68a',
+            boxShadow:'0 2px 12px rgba(245,158,11,0.15)',
+            display:'flex', alignItems:'center', gap:14,
+            borderTop:'3px solid #f59e0b',
+            gridColumn:'span 1',
+          }}>
+            <div style={{ padding:10, background:'#fef3c7', borderRadius:14, color:'#d97706', flexShrink:0 }}>
+              <Ic n="cash" s={24} />
+            </div>
+            <div style={{ minWidth:0 }}>
+              <span style={{ fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1.5, color:'#d97706', display:'block', lineHeight:1.4 }}>ยอดชำระตอนนี้</span>
+              <h3 style={{ fontSize:17, fontWeight:900, color:'#92400e', margin:'2px 0 1px', lineHeight:1 }}>฿{nowPay.toLocaleString()}</h3>
+              <p style={{ fontSize:9, color:'#f59e0b', fontWeight:700, margin:0 }}>
+                ปกติ + BL · {nowPayPct}% ของเป้า
+              </p>
+              <div style={{ display:'flex', gap:4, marginTop:4, flexWrap:'wrap' }}>
+                <span style={{ fontSize:8, background:'#eff6ff', color:'#2563eb', padding:'1px 6px', borderRadius:20, fontWeight:900, border:'1px solid #bfdbfe' }}>
+                  ปกติ ฿{stats.firstPay.toLocaleString()}
+                </span>
+                <span style={{ fontSize:8, background:'#f0fdf4', color:'#16a34a', padding:'1px 6px', borderRadius:20, fontWeight:900, border:'1px solid #bbf7d0' }}>
+                  BL ฿{stats.blPay.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {[
             {
               label: 'ยอดซื้อรวม(เป้าหมาย)',
@@ -841,7 +851,7 @@ const App = () => {
             {
               label: 'ยอดค้างชำระ',
               val: `${stats.outstanding.toLocaleString()} ฿`,
-              sub: `${stats.debtC} คนที่มีหนี้ค้างชำระ (เฉพาะเป้าหมาย)`,
+              sub: `${stats.debtC} คนที่มีหนี้ค้างชำระ`,
               bg: '#fff1f2', ic: 'alert', icbg: '#ffe4e6', icc: '#e11d48', vc: '#e11d48',
               border: '#fecdd3',
             },
@@ -865,7 +875,43 @@ const App = () => {
           ))}
         </div>
 
-        {/* ── Stats customers ── */}
+        {/* ✦ NEW: Mounjaro Revenue Breakdown Bar */}
+        {ready && stats.mjRev > 0 && (
+          <div style={{ background:'white', borderRadius:20, padding:'16px 20px', marginBottom:16, border:'1px solid #dbeafe', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <Ic n="syringe" s={16} c="text-blue-600" />
+                <span style={{ fontWeight:900, fontSize:13, color:'#1e3a8a' }}>ยอดขาย Mounjaro รวม (ชำระปกติ + ชำระหนี้)</span>
+                <span style={{ background:'#dbeafe', color:'#1d4ed8', fontSize:11, fontWeight:900, padding:'2px 10px', borderRadius:20, border:'1px solid #bfdbfe' }}>฿{stats.mjRev.toLocaleString()}</span>
+              </div>
+              <span style={{ fontSize:11, fontWeight:700, color:'#64748b' }}>คิดเป็น {mjPercent}% ของยอดคลินิก</span>
+            </div>
+            <div style={{ display:'flex', borderRadius:10, overflow:'hidden', height:20, gap:1 }}>
+              {stats.mjRevNormal > 0 && (
+                <div style={{ flex: stats.mjRevNormal, background:'#3b82f6', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontSize:9, fontWeight:900, color:'white' }}>ปกติ ฿{stats.mjRevNormal.toLocaleString()}</span>
+                </div>
+              )}
+              {stats.mjRevDebt > 0 && (
+                <div style={{ flex: stats.mjRevDebt, background:'#22c55e', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontSize:9, fontWeight:900, color:'white' }}>BL ฿{stats.mjRevDebt.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', gap:16, marginTop:8 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:10, height:10, borderRadius:3, background:'#3b82f6' }}/>
+                <span style={{ fontSize:10, color:'#64748b', fontWeight:700 }}>ชำระปกติ: ฿{stats.mjRevNormal.toLocaleString()} ({stats.mjRev > 0 ? ((stats.mjRevNormal/stats.mjRev)*100).toFixed(1) : 0}%)</span>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:10, height:10, borderRadius:3, background:'#22c55e' }}/>
+                <span style={{ fontSize:10, color:'#64748b', fontWeight:700 }}>ชำระหนี้: ฿{stats.mjRevDebt.toLocaleString()} ({stats.mjRev > 0 ? ((stats.mjRevDebt/stats.mjRev)*100).toFixed(1) : 0}%)</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Customer Stats ── */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:10, marginBottom:24 }}>
           {[
             { l:'ลูกค้าทั้งหมด', v:filtered.length, c:'#94a3b8' },
@@ -903,7 +949,7 @@ const App = () => {
               <span style={{ position:'absolute', top:-8, left:12, background:'white', padding:'0 4px', fontSize:8, fontWeight:900, color:'#94a3b8', textTransform:'uppercase' }}>ค้นหา</span>
             </div>
             <button onClick={() => setDebtOnly(v => !v)}
-              style={{ padding:'12px', borderRadius:12, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', justifyItems:'center', justifyContent:'center', gap:6, border:`1px solid ${debtOnly ? '#e11d48' : '#fecdd3'}`, background: debtOnly ? '#e11d48' : 'white', color: debtOnly ? 'white' : '#e11d48', cursor:'pointer' }}>
+              style={{ padding:'12px', borderRadius:12, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', gap:6, border:`1px solid ${debtOnly ? '#e11d48' : '#fecdd3'}`, background: debtOnly ? '#e11d48' : 'white', color: debtOnly ? 'white' : '#e11d48', cursor:'pointer' }}>
               <Ic n="alert" s={14} />{debtOnly ? '✓ เฉพาะมีหนี้' : 'เฉพาะมีหนี้'}
             </button>
           </div>
@@ -933,7 +979,7 @@ const App = () => {
                     { k:'mounjaroInj',    label:'สรุปบริการ',            align:'left'  },
                     { k:'lastDate',       label:'บริการล่าสุด',          align:'center', blue:true },
                     { k:'totalPurchase',  label:'ยอดซื้อรวม',           align:'right', bold:true },
-                    { k:'totalPaid',      label:'ยอดชำระครั้งแรก',      align:'right' },
+                    { k:'totalPaid',      label:'ยอดชำระปกติ',          align:'right' },
                     { k:'debtPaid',       label:'ยอดชำระ BL',            align:'right', green:true },
                     { k:'debtAmount',     label:'ยอดค้างชำระ',           align:'right', red:true },
                     { k:'',              label:'ประวัติ',                align:'center' },
@@ -966,7 +1012,7 @@ const App = () => {
       {/* ── Summary Modal ── */}
       {modal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
-          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:460, padding:24, position:'relative', maxHeight:'90vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
+          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:480, padding:24, position:'relative', maxHeight:'90vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
             <button onClick={() => setModal(false)} style={{ position:'absolute', top:16, right:16, background:'#f8fafc', border:'none', borderRadius:'50%', padding:8, cursor:'pointer', color:'#94a3b8' }}>
               <Ic n="x" s={18} />
             </button>
@@ -991,19 +1037,39 @@ const App = () => {
                 </div>
               ))}
               <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:8 }}>
-                {/* ยอดเงินต่างๆ */}
+                {/* ✦ ยอดชำระตอนนี้ card ใน modal */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', borderRadius:14, background:'#fef9c3', border:'2px solid #fde047' }}>
+                  <div>
+                    <span style={{ fontWeight:900, fontSize:14, color:'#92400e' }}>💰 ยอดชำระตอนนี้</span>
+                    <p style={{ fontSize:10, color:'#a16207', margin:'2px 0 0', fontWeight:700 }}>ชำระปกติ ฿{stats.firstPay.toLocaleString()} + BL ฿{stats.blPay.toLocaleString()}</p>
+                  </div>
+                  <span style={{ fontSize:22, fontWeight:900, color:'#b45309' }}>฿{nowPay.toLocaleString()}</span>
+                </div>
                 {[
                   ['ยอดรับรวมทั้งคลินิก',          `฿${clinicTotalSales.toLocaleString()}`, '#f8fafc', '#0f172a', '#e2e8f0'],
-                  ['ยอดขาย Mounjaro (หน้าร้าน)',  `฿${stats.mjRev.toLocaleString()} (${mjPercent}%)`,    '#eff6ff', '#1d4ed8', '#bfdbfe'],
-                  ['ยอดซื้อรวม (เป้าหมาย)',                 `฿${stats.totalPurchase.toLocaleString()}`, '#ffffff', '#475569', '#f1f5f9'],
-                  ['ยอดชำระ BL',                 `฿${stats.blPay.toLocaleString()}`,    '#f5f3ff', '#7c3aed', '#ddd6fe'],
-                  ['ยอดค้างชำระ',                 `฿${stats.outstanding.toLocaleString()}`, '#fff1f2', '#e11d48', '#fecdd3'],
+                  ['ยอดขาย Mounjaro (ชำระปกติ+BL)', `฿${stats.mjRev.toLocaleString()} (${mjPercent}%)`, '#eff6ff', '#1d4ed8', '#bfdbfe'],
+                  ['ยอดซื้อรวม (เป้าหมาย)',         `฿${stats.totalPurchase.toLocaleString()}`, '#ffffff', '#475569', '#f1f5f9'],
+                  ['ยอดค้างชำระ',                   `฿${stats.outstanding.toLocaleString()}`, '#fff1f2', '#e11d48', '#fecdd3'],
                 ].map(([l, v, bg, vc, bd]) => (
                   <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderRadius:12, background:bg, border:`1px solid ${bd}` }}>
                     <span style={{ fontWeight:700, fontSize:13 }}>{l}</span>
                     <span style={{ fontSize:20, fontWeight:900, color:vc }}>{v}</span>
                   </div>
                 ))}
+                {/* Mounjaro breakdown */}
+                <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:12, padding:'10px 14px' }}>
+                  <p style={{ fontSize:11, fontWeight:900, color:'#1d4ed8', margin:'0 0 6px' }}>💉 ยอดขาย Mounjaro แบ่งตามประเภทชำระ</p>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <div style={{ flex:1, background:'white', borderRadius:10, padding:'8px 12px', border:'1px solid #dbeafe' }}>
+                      <p style={{ fontSize:9, color:'#93c5fd', fontWeight:900, margin:0, textTransform:'uppercase' }}>ชำระปกติ</p>
+                      <p style={{ fontSize:16, fontWeight:900, color:'#1d4ed8', margin:'2px 0 0' }}>฿{stats.mjRevNormal.toLocaleString()}</p>
+                    </div>
+                    <div style={{ flex:1, background:'white', borderRadius:10, padding:'8px 12px', border:'1px solid #bbf7d0' }}>
+                      <p style={{ fontSize:9, color:'#86efac', fontWeight:900, margin:0, textTransform:'uppercase' }}>ชำระหนี้ (BL)</p>
+                      <p style={{ fontSize:16, fontWeight:900, color:'#16a34a', margin:'2px 0 0' }}>฿{stats.mjRevDebt.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               {Object.keys(stats.injBD).length > 0 && (
                 <div style={{ background:'#f8fafc', borderRadius:20, padding:16, border:'1px solid #f1f5f9', marginTop:12 }}>
@@ -1096,15 +1162,16 @@ const App = () => {
                       </div>
                     </div>
 
-                    {/* 6 Money Stats (Added Clinic Total & Mounjaro %) */}
+                    {/* ✦ UPDATED: 7 Money Stats รวม ยอดชำระตอนนี้ */}
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:9 }}>
                       {[
-                        { l:'ยอดรับรวมทั้งคลินิก',   v:`฿${clinicTotalSales.toLocaleString()}`, bg:'rgba(245,158,11,0.25)', vc:'#fcd34d' },
-                        { l:'สัดส่วน Mounjaro', v:`${mjPercent}%`, bg:'rgba(59,130,246,0.3)', vc:'#93c5fd' },
-                        { l:'ซื้อรวม (เป้าหมาย)',   v:`฿${stats.totalPurchase.toLocaleString()}`, bg:'rgba(255,255,255,0.18)', vc:'white' },
-                        { l:'ชำระหน้าร้าน (เป้าหมาย)', v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',  vc:'#6ee7b7' },
-                        { l:'ชำระ BL (เป้าหมาย)',   v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)', vc:'#ddd6fe' },
-                        { l:'ค้างชำระ (เป้าหมาย)',  v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)',  vc:'#fda4af' },
+                        { l:'ยอดรับรวมทั้งคลินิก',         v:`฿${clinicTotalSales.toLocaleString()}`, bg:'rgba(245,158,11,0.25)',    vc:'#fcd34d' },
+                        { l:'สัดส่วน Mounjaro',             v:`${mjPercent}%`,                         bg:'rgba(59,130,246,0.3)',     vc:'#93c5fd' },
+                        { l:'💰 ยอดชำระตอนนี้ (ปกติ+BL)',  v:`฿${nowPay.toLocaleString()}`,           bg:'rgba(253,224,71,0.3)',     vc:'#fef08a' },
+                        { l:'ซื้อรวม (เป้าหมาย)',           v:`฿${stats.totalPurchase.toLocaleString()}`, bg:'rgba(255,255,255,0.18)', vc:'white'   },
+                        { l:'ชำระหน้าร้าน',                 v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',   vc:'#6ee7b7' },
+                        { l:'ชำระ BL',                      v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)', vc:'#ddd6fe' },
+                        { l:'ค้างชำระ',                     v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)', vc:'#fda4af'  },
                       ].map(({ l, v, bg, vc }) => (
                         <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 13px' }}>
                           <div style={{ color:'rgba(255,255,255,0.65)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
@@ -1135,13 +1202,21 @@ const App = () => {
                     {/* Mounjaro */}
                     <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:12, padding:'11px 14px', marginBottom:9 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                        <span style={{ color:'rgba(255,255,255,0.65)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>💉 Mounjaro</span>
+                        <span style={{ color:'rgba(255,255,255,0.65)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>💉 Mounjaro (ปกติ+BL)</span>
                         <span style={{ color:'#93c5fd', fontSize:9, fontWeight:700 }}>฿{stats.mjRev.toLocaleString()} ({mjPercent}%)</span>
                       </div>
                       <div style={{ color:'white', fontSize:12, fontWeight:800 }}>
                         ฉีดทั้งหมด <span style={{ fontSize:22, color:'#60a5fa', fontWeight:900 }}>{stats.mjInj}</span> ครั้ง
                         <span style={{ color:'rgba(255,255,255,0.5)', fontSize:10, marginLeft:8 }}>
                           · ที่ฉีดจริง {stats.injC} คน · มีหนี้ {stats.debtC} คน
+                        </span>
+                      </div>
+                      <div style={{ display:'flex', gap:8, marginTop:6 }}>
+                        <span style={{ fontSize:9, background:'rgba(59,130,246,0.4)', color:'#bfdbfe', padding:'2px 8px', borderRadius:8, fontWeight:900 }}>
+                          ปกติ ฿{stats.mjRevNormal.toLocaleString()}
+                        </span>
+                        <span style={{ fontSize:9, background:'rgba(34,197,94,0.4)', color:'#bbf7d0', padding:'2px 8px', borderRadius:8, fontWeight:900 }}>
+                          BL ฿{stats.mjRevDebt.toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -1164,7 +1239,7 @@ const App = () => {
 
                     {/* Footer */}
                     <div style={{ marginTop:12, borderTop:'1px solid rgba(255,255,255,0.12)', paddingTop:9, display:'flex', justifyContent:'space-between' }}>
-                      <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>INJECTION HISTORY + DEBT DASHBOARD v4</div>
+                      <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>INJECTION HISTORY + DEBT DASHBOARD v5</div>
                       <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>ข้อมูล {filtered.length} HN</div>
                     </div>
                   </div>
