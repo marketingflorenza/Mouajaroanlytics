@@ -1172,12 +1172,12 @@ const App = () => {
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:9 }}>
                       {[
                         { l:'ยอดรับรวมทั้งคลินิก',             v:`฿${clinicTotalSales.toLocaleString()}`, bg:'rgba(245,158,11,0.25)', vc:'#fcd34d' },
-                        { l:'สัดส่วน Mounjaro (ตรงกับ Code1)',  v:`${mjPercent}%`,                        bg:'rgba(59,130,246,0.3)',  vc:'#93c5fd' },
+                        { l:'สัดส่วน % Mounjaro',  v:`${mjPercent}%`,                        bg:'rgba(59,130,246,0.3)',  vc:'#93c5fd' },
                         { l:'💉 ยอดขาย Mounjaro (ปกติ+BL)',    v:`฿${stats.mjRev.toLocaleString()}`,     bg:'rgba(96,165,250,0.3)',  vc:'#bfdbfe' },
                         { l:'💰 ยอดชำระตอนนี้ (Weight-Loss)',   v:`฿${nowPay.toLocaleString()}`,          bg:'rgba(253,224,71,0.3)', vc:'#fef08a'  },
-                        { l:'ชำระหน้าร้าน',                    v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',vc:'#6ee7b7' },
-                        { l:'ชำระ BL',                         v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)',vc:'#ddd6fe' },
-                        { l:'ค้างชำระ',                        v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)', vc:'#fda4af' },
+                        { l:'ชำระหน้าร้านครั้งแรก',                    v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',vc:'#6ee7b7' },
+                        { l:'ยอดชำระ BL มาแล้ว',                         v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)',vc:'#ddd6fe' },
+                        { l:'ยอดค้างชำระ BL',                        v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)', vc:'#fda4af' },
                       ].map(({ l, v, bg, vc }) => (
                         <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 13px' }}>
                           <div style={{ color:'rgba(255,255,255,0.65)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
