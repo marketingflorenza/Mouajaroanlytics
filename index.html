@@ -810,7 +810,7 @@ const App = () => {
               <span style={{ color:'#f43f5e' }}> + Debt</span>
             </h1>
             <p style={{ color:'#94a3b8', marginTop:6, fontStyle:'italic', fontSize:13 }}>
-              ระบบวิเคราะห์ Mounjaro · PEPTIDE · ปากกา — ยอดคำนวณตาม transaction date ตรงกับ Code 1
+              ระบบวิเคราะห์ Mounjaro · PEPTIDE · ปากกา — ยอดคำนวณตาม transaction date
             </p>
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
@@ -833,14 +833,14 @@ const App = () => {
         <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:16, padding:'12px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:10 }}>
           <Ic n="info" s={16} c="text-blue-500" />
           <p style={{ fontSize:12, color:'#1d4ed8', fontWeight:700, margin:0 }}>
-            v6 Fixed: ยอดทุกตัวคำนวณจาก <strong>transaction date</strong> ตามช่วงเวลาที่เลือก — ตรงกับ Code 1 (Clinic Sales Dashboard)
+            ระบบคำนวนลูกค้า Mounjaro <strong>transaction date</strong> ใส่ไฟล์รายงาน nclinic รายงานที่ 12.5 และ 1.7 (Clinic Sales Dashboard)
           </p>
         </div>
 
         {/* ── Upload ── */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:28 }}>
-          <UpZone label="① ไฟล์รายการขาย (Sales)" sub="คอลัมน์: HN · รายการ · ยอดชำระ · ประเภทชำระ" done={!!salesData} fname={sFile} onFile={handleSales} />
-          <UpZone label="② ไฟล์ยอดหนี้ (Debtors)" sub="อัปโหลดไฟล์รายงานลูกหนี้ Florenza Clinic" done={!!debtData} fname={dFile} onFile={handleDebt} />
+          <UpZone label="① ไฟล์รายการขาย (Sales)" sub="คอลัมน์: HN · รายการ · ยอดชำระ · ประเภทชำระ รายงาน 12.5" done={!!salesData} fname={sFile} onFile={handleSales} />
+          <UpZone label="② ไฟล์ยอดหนี้ (Debtors)" sub="อัปโหลดไฟล์รายงานลูกหนี้ Florenza Clinic รายงาน 1.7" done={!!debtData} fname={dFile} onFile={handleDebt} />
         </div>
 
         {(sErr || dErr) && (
