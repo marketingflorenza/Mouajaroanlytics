@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Mounjaro Dashboard v6 (Fixed — Date-Accurate)</title>
+<title>Mounjaro Dashboard v7 (เพิ่มลูกค้า Mounjaro ที่ชำระ)</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -63,6 +63,7 @@ const Ic = ({ n, s=18, c='' }) => {
     activity:<><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
     cash:    <><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></>,
     info:    <><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></>,
+    plus:    <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
   };
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24"
@@ -72,9 +73,7 @@ const Ic = ({ n, s=18, c='' }) => {
   );
 };
 
-/* ── Constants ──
-   ✅ FIX: keyword ตรงกับ Code 1 + เพิ่ม mouajaro, มอนจาโร ครบถ้วน
-*/
+/* ── Constants ── */
 const KW = ['peptide','เปปไทด์','mounjaro','mouajaro','มอนจาโร','slimnow','สลิมนาว','คุมหิว','ปากกา','ลดน้ำหนัก'];
 const TM = {
   mounjaro: { label:'Mounjaro',        cls:'bm', dot:'#3b82f6' },
@@ -87,7 +86,6 @@ const TM = {
 /* ── Helpers ── */
 const getType = (item) => {
   const l = item.toLowerCase();
-  /* ✅ FIX: keyword ตรวจจับ Mounjaro ตรงกับ Code 1 (รวม mouajaro + มอนจาโร) */
   if (l.includes('mounjaro') || l.includes('mouajaro') || l.includes('มอนจาโร')) return 'mounjaro';
   if (l.includes('peptide')  || l.includes('เปปไทด์')  || l.includes('คุมหิว'))  return 'peptide';
   if (l.includes('ปากกา')   || l.includes('ลดน้ำหนัก'))                           return 'paka';
@@ -116,10 +114,7 @@ const fmt = (d) =>
 
 const normHN = (v) => String(v || '').trim();
 
-/* ── Parse Sales ──
-   ✅ FIX CORE: เพิ่ม rawTxns[] เก็บทุก transaction พร้อม date
-   เพื่อให้คำนวณยอดตาม date range ได้เหมือน Code 1 ที่กรอง raw rows
-*/
+/* ── Parse Sales ── */
 const parseSales = (rows) => {
   const H = rows[0].map(h => String(h || '').trim());
   const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
@@ -148,7 +143,6 @@ const parseSales = (rows) => {
     const ptype   = String(r[idx.ptype] || '');
     const isDebtPay = ptype === 'ชำระหนี้';
 
-    /* allSales = ยอดรวมทุกรายการทุก HN (เหมือน Code 1 นับ filteredData ทั้งหมด) */
     if (paid > 0) allSales.push({ date: sDate, paid });
 
     if (!r[idx.hn]) continue;
@@ -167,7 +161,6 @@ const parseSales = (rows) => {
       G[hn] = {
         hn, name: String(r[idx.name] || '-'), phone, regDate,
         lastDate: sDate,
-        /* ✅ Lifetime totals (ไม่ใช้คำนวณยอดตาม date range แล้ว → ใช้ rawTxns แทน) */
         totalPaid: 0, debtPaid: 0,
         mounjaroPaid: 0, mounjaroPaidNormal: 0, mounjaroPaidDebt: 0,
         mounjaroInj: 0, mounjaroDates: [],
@@ -175,7 +168,6 @@ const parseSales = (rows) => {
         hasMounjaro: false, hasPeptide: false, hasPaka: false,
         serviceHistory: [], itemTypesUsed: new Set(),
         debtAmount: 0, debtItems: [],
-        /* ✅ FIX KEY: เก็บทุก transaction พร้อม date เพื่อกรองตาม date range ทีหลัง */
         rawTxns: [],
       };
     }
@@ -184,7 +176,6 @@ const parseSales = (rows) => {
     if (sDate > g.lastDate) g.lastDate = sDate;
     g.itemTypesUsed.add(iType);
 
-    /* ✅ บันทึกทุก transaction ลง rawTxns */
     g.rawTxns.push({
       date: sDate,
       paid,
@@ -196,7 +187,6 @@ const parseSales = (rows) => {
       isDebtPay,
     });
 
-    /* Lifetime aggregates (ยังคงไว้เพื่อใช้กับ serviceHistory / mounjaroDates) */
     g.serviceHistory.push({ date: sDate, dateStr: fmt(sDate), item: itemName, qty, paid, ptype, iType, isCourse, isDebtPay });
     g.itemTypesUsed.add(iType);
 
@@ -230,7 +220,7 @@ const parseSales = (rows) => {
   return { customers: G, allSales };
 };
 
-/* ── Parse Debt ── (unchanged) */
+/* ── Parse Debt ── */
 const parseDebt = (rows) => {
   const H = rows[0].map(h => String(h || '').trim());
   const fi = (ns) => H.findIndex(h => ns.some(n => h.includes(n)));
@@ -256,8 +246,7 @@ const parseDebt = (rows) => {
     D[curHN].totalDebt = kwDebt;
     if (kwDebt > 0) {
       D[curHN].items.push(...kwItems.filter(ci => ci.balance > 0).map(ci => ({
-        item: ci.name, amount: ci.balance, status: ci.status || 'ค้างชำระ',
-        date: ci.date, dateStr: ci.dateStr, overdue: (ci.status || '').includes('เกิน'),
+        item: ci.name, amount: ci.balance, status: ci.sta
       })));
     }
   };
@@ -429,7 +418,6 @@ const CRow = ({ row, i }) => {
         </td>
         <td className="px-5 py-4">
           <div style={{ minWidth:140 }}>
-            {/* ✅ แสดงยอดตาม date range (date-filtered) */}
             {row.rangeMjInj > 0 && (
               <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                 <span className="bm" style={{ fontSize:8, padding:'1px 7px', borderRadius:20, fontWeight:900 }}>Mounjaro</span>
@@ -460,7 +448,6 @@ const CRow = ({ row, i }) => {
           </div>
         </td>
         <td className="px-5 py-4 text-right">
-          {/* ✅ totalPurchase = ยอดใน date range + debt คงเหลือ */}
           <p style={{ fontSize:14, fontWeight:900, color:'#0f172a' }}>{row.rangeTotalPurchase.toLocaleString()}</p>
           <p style={{ fontSize:8, color:'#94a3b8', fontWeight:700 }}>ซื้อในช่วงเวลา</p>
         </td>
@@ -504,10 +491,7 @@ const CRow = ({ row, i }) => {
   );
 };
 
-/* ═══════════════════════════════════════════════════
-   ✅ HELPER: คำนวณยอดตาม date range จาก rawTxns
-   ตรงกับ Code 1 ที่กรอง raw rows ตาม filteredData
-═══════════════════════════════════════════════════ */
+/* ── Helper: Calculate Range Metrics ── */
 const calcRangeMetrics = (rawTxns, s, e) => {
   const txns = rawTxns.filter(t => {
     if (s && t.date < s) return false;
@@ -561,7 +545,8 @@ const App = () => {
   const [imgModal,   setImgModal]   = useState(false);
   const [branchName, setBranchName] = useState('');
   const [exporting,  setExporting]  = useState(false);
-  const imgRef = useRef(null);
+  const [addMjModal, setAddMjModal] = useState(false);
+  const imgRef = useRef();
 
   const readX = (file, cb) => {
     const r = new FileReader();
@@ -590,7 +575,6 @@ const App = () => {
     });
   };
 
-  /* ✅ merged: รวม salesData + debtData (ยังคงเก็บ lifetime data) */
   const merged = useMemo(() => {
     const sCust = salesData?.customers || {};
     const dCust = debtData || {};
@@ -620,7 +604,6 @@ const App = () => {
     return res;
   }, [salesData, debtData]);
 
-  /* ✅ ยอดรับรวมทั้งคลินิก — กรองตาม date range เหมือน Code 1 */
   const clinicTotalSales = useMemo(() => {
     if (!salesData?.allSales) return 0;
     const s = startD ? new Date(startD) : null;
@@ -634,9 +617,6 @@ const App = () => {
     }, 0);
   }, [salesData, startD, endD]);
 
-  /* ✅ FIX CORE: filtered คำนวณยอดต่อ customer ตาม transaction date
-     ตรงกับ Code 1 ที่กรอง filteredData (raw rows) ตามวันที่ขาย
-  */
   const filtered = useMemo(() => {
     const s = startD ? new Date(startD) : null;
     const e = endD   ? new Date(endD)   : null;
@@ -645,25 +625,18 @@ const App = () => {
 
     let list = merged
       .map(item => {
-        /* คำนวณ range metrics จาก rawTxns */
         const rm = calcRangeMetrics(item.rawTxns || [], s, e);
-
-        /* ตรวจสอบว่า customer มี transaction ในช่วงเวลาหรือไม่ */
         const inRange = (s || e) ? (rm.hasTxnsInRange || item.debtAmount > 0) : true;
-
-        /* customer status (ใหม่/เก่า ตาม regDate ในช่วงเวลา) */
         let customerStatus = 'เก่า';
         if (s) {
           const ee = e || new Date();
           if (item.regDate >= s && item.regDate <= ee) customerStatus = 'ใหม่';
         }
-
         return {
           ...item,
           ...rm,
           customerStatus,
           inRange,
-          /* ✅ rangeTotalPurchase = ยอดชำระในช่วงเวลา + หนี้คงเหลือ (เหมือน Code 1) */
           rangeTotalPurchase: rm.rangeTotalPaid + rm.rangeDebtPaid + item.debtAmount,
         };
       })
@@ -687,9 +660,6 @@ const App = () => {
     return list;
   }, [merged, search, startD, endD, srtK, srtD, debtOnly, tFilter]);
 
-  /* ✅ stats: คำนวณจาก range-filtered metrics ของแต่ละ customer
-     ทำให้ mjRev ตรงกับ Code 1 Mounjaro category revenue
-  */
   const stats = useMemo(() =>
     filtered.reduce((a, c) => {
       a.totalPurchase += c.rangeTotalPurchase;
@@ -697,7 +667,7 @@ const App = () => {
       a.blPay         += c.rangeDebtPaid;
       a.outstanding   += c.debtAmount;
       a.mjInj         += c.rangeMjInj;
-      a.mjRev         += c.rangeMjPaid;          /* ✅ ตรงกับ Code 1 Mounjaro rev */
+      a.mjRev         += c.rangeMjPaid;
       a.mjRevNormal   += c.rangeMjPaidNormal;
       a.mjRevDebt     += c.rangeMjPaidDebt;
       if (c.customerStatus === 'ใหม่') a.newC++; else a.oldC++;
@@ -713,7 +683,12 @@ const App = () => {
     }, { totalPurchase:0, firstPay:0, blPay:0, outstanding:0, mjInj:0, mjRev:0, mjRevNormal:0, mjRevDebt:0, newC:0, oldC:0, debtC:0, mjC:0, pepC:0, pakaC:0, injC:0, injBD:{} }),
   [filtered]);
 
-  /* ยอดชำระตอนนี้ = ปกติ + BL ทั้ง weight-loss customers */
+  /* ✅ NEW: ลูกค้า Mounjaro ที่ชำระเงินในช่วงเวลา */
+  const mjPaidCustomers = useMemo(() => {
+    return filtered.filter(c => c.hasMounjaro && (c.rangeMjPaid > 0 || c.rangeMjInj > 0))
+      .sort((a, b) => (b.rangeMjPaid || 0) - (a.rangeMjPaid || 0));
+  }, [filtered]);
+
   const nowPay    = stats.firstPay + stats.blPay;
   const mjPercent = clinicTotalSales > 0 ? ((stats.mjRev / clinicTotalSales) * 100).toFixed(1) : 0;
   const nowPayPct = stats.totalPurchase > 0 ? ((nowPay / stats.totalPurchase) * 100).toFixed(1) : 0;
@@ -757,6 +732,27 @@ const App = () => {
     XLSX.writeFile(wb, `Mounjaro_Report_Fixed_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  /* ✅ NEW: Export ลูกค้า Mounjaro ที่ชำระ */
+  const doExportMjPaidXLSX = () => {
+    if (!mjPaidCustomers.length) return;
+    const rows = mjPaidCustomers.map((c, i) => ({
+      'ลำดับ': i+1,
+      'HN': c.hn,
+      'ชื่อ-สกุล': c.name,
+      'เบอร์โทร': c.phone || '-',
+      'ประเภทลูกค้า': c.customerStatus === 'ใหม่' ? 'ลูกค้าใหม่' : 'ลูกค้าเก่า',
+      'ฉีด Mounjaro': c.rangeMjInj,
+      'ยอดขาย Mounjaro (ปกติ)': c.rangeMjPaidNormal,
+      'ยอดขาย Mounjaro (BL)': c.rangeMjPaidDebt,
+      'ยอดขาย Mounjaro (รวม)': c.rangeMjPaid,
+      'บริการล่าสุด': fmt(c.rangeLastDate || c.lastDate),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mounjaro Paid');
+    XLSX.writeFile(wb, `Mounjaro_Paid_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const doExportImage = async () => {
     if (!imgRef.current) return;
     setExporting(true);
@@ -778,8 +774,6 @@ const App = () => {
     t += `ลูกค้าทั้งหมด (ในช่วงเวลา): ${filtered.length} คน\n`;
     t += `ลูกค้า Mounjaro: ${stats.mjC} คน\nลูกค้า PEPTIDE: ${stats.pepC} คน\nลูกค้าปากกา: ${stats.pakaC} คน\n`;
     t += `ฉีด Mounjaro: ${stats.mjInj} ครั้ง\nลูกค้าใหม่: ${stats.newC} คน\nลูกค้าเก่า: ${stats.oldC} คน\n`;
-    t += `-----------------------------\n`;
-    t += `ยอดรับรวมคลินิก: ฿${clinicTotalSales.toLocaleString()}\n`;
     t += `ยอดขาย Mounjaro (รวม ปกติ+BL): ฿${stats.mjRev.toLocaleString()} (${mjPercent}%)\n`;
     t += `  - ชำระปกติ: ฿${stats.mjRevNormal.toLocaleString()}\n`;
     t += `  - ชำระ BL: ฿${stats.mjRevDebt.toLocaleString()}\n`;
@@ -791,6 +785,23 @@ const App = () => {
     t += `ยอดค้างชำระ: ฿${stats.outstanding.toLocaleString()}\n`;
     t += `ลูกค้ามีหนี้: ${stats.debtC} คน\n-----------------------------\n`;
     Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).forEach(([n, c]) => { t += `ฉีด ${n} ครั้ง: ${c} คน\n`; });
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+    ta.select(); try { document.execCommand('copy'); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000); } catch {}
+    document.body.removeChild(ta);
+  };
+
+  /* ✅ NEW: Copy ลูกค้า Mounjaro ที่ชำระ */
+  const doCopyMjPaid = () => {
+    let t = `ลูกค้า Mounjaro ที่ชำระเงิน (ในช่วงเวลา)\n=============================\n`;
+    t += `ช่วงเวลา: ${startD || 'ทั้งหมด'} ถึง ${endD || 'ทั้งหมด'}\n`;
+    t += `จำนวน: ${mjPaidCustomers.length} คน\n\n`;
+    mjPaidCustomers.forEach((c, i) => {
+      t += `${i+1}. ${c.name} (HN: ${c.hn})\n`;
+      t += `   เบอร์: ${c.phone}\n`;
+      t += `   ฉีด Mounjaro: ${c.rangeMjInj} ครั้ง\n`;
+      t += `   ยอดขาย Mounjaro: ฿${c.rangeMjPaid.toLocaleString()} (ปกติ ฿${c.rangeMjPaidNormal.toLocaleString()} + BL ฿${c.rangeMjPaidDebt.toLocaleString()})\n`;
+      t += `   บริการล่าสุด: ${fmt(c.rangeLastDate || c.lastDate)}\n\n`;
+    });
     const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
     ta.select(); try { document.execCommand('copy'); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000); } catch {}
     document.body.removeChild(ta);
@@ -816,6 +827,9 @@ const App = () => {
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             <button onClick={reset} className="flex items-center gap-1.5 bg-white border border-red-100 text-red-500 px-4 py-2.5 rounded-2xl font-bold hover:bg-red-50 text-sm transition-all">
               <Ic n="refresh" s={14} />รีเฟรช
+            </button>
+            <button onClick={() => setAddMjModal(true)} disabled={!ready} className="flex items-center gap-1.5 bg-cyan-600 text-white px-4 py-2.5 rounded-2xl font-bold hover:bg-cyan-700 disabled:opacity-40 text-sm transition-all">
+              <Ic n="plus" s={14} />เพิ่ม Mounjaro
             </button>
             <button onClick={() => setModal(true)} disabled={!ready} className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2.5 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-40 text-sm transition-all">
               <Ic n="pie" s={14} />สรุปข้อมูล
@@ -928,9 +942,7 @@ const App = () => {
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <Ic n="syringe" s={16} c="text-blue-600" />
                 <span style={{ fontWeight:900, fontSize:13, color:'#1e3a8a' }}>ยอดขาย Mounjaro รวม (ชำระปกติ + ชำระหนี้) — ตรงกับ Code 1</span>
-                <span style={{ background:'#dbeafe', color:'#1d4ed8', fontSize:11, fontWeight:900, padding:'2px 10px', borderRadius:20, border:'1px solid #bfdbfe' }}>฿{stats.mjRev.toLocaleString()}</span>
               </div>
-              <span style={{ fontSize:11, fontWeight:700, color:'#64748b' }}>{mjPercent}% ของยอดคลินิก</span>
             </div>
             <div style={{ display:'flex', borderRadius:10, overflow:'hidden', height:20, gap:1 }}>
               {stats.mjRevNormal > 0 && (
@@ -1051,6 +1063,88 @@ const App = () => {
         </div>
       </div>
 
+      {/* ✅ NEW: Add Mounjaro Customers Modal */}
+      {addMjModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
+          <div style={{ background:'white', borderRadius:28, boxShadow:'0 25px 50px rgba(0,0,0,0.25)', width:'100%', maxWidth:720, padding:24, position:'relative', maxHeight:'90vh', overflowY:'auto', animation:'fadeIn .2s ease-out' }} className="cs">
+            <button onClick={() => setAddMjModal(false)} style={{ position:'absolute', top:16, right:16, background:'#f8fafc', border:'none', borderRadius:'50%', padding:8, cursor:'pointer', color:'#94a3b8' }}>
+              <Ic n="x" s={18} />
+            </button>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
+              <div style={{ padding:12, background:'#cffafe', borderRadius:16, color:'#0891b2' }}><Ic n="plus" s={22} /></div>
+              <div>
+                <h2 style={{ fontSize:20, fontWeight:900, margin:0 }}>เพิ่มลูกค้า Mounjaro ที่ชำระ</h2>
+                <p style={{ fontSize:10, color:'#94a3b8', margin:'2px 0 0', fontWeight:700 }}>ลูกค้า Mounjaro ที่มีการชำระเงินในช่วงเวลาที่เลือก</p>
+              </div>
+            </div>
+
+            <div style={{ background:'#f0f9ff', border:'1px solid #bfdbfe', borderRadius:16, padding:14, marginBottom:16 }}>
+              <p style={{ fontSize:12, fontWeight:700, color:'#1e40af', margin:0 }}>
+                📊 พบลูกค้า Mounjaro ที่ชำระเงิน: <strong>{mjPaidCustomers.length} คน</strong>
+              </p>
+              <p style={{ fontSize:10, color:'#3b82f6', margin:'4px 0 0', fontWeight:600 }}>
+                ยอดรวม: <strong>฿{mjPaidCustomers.reduce((sum, c) => sum + c.rangeMjPaid, 0).toLocaleString()}</strong>
+              </p>
+            </div>
+
+            <div className="cs" style={{ maxHeight:400, overflowY:'auto', marginBottom:16, paddingRight:4 }}>
+              {mjPaidCustomers.length > 0 ? (
+                <div style={{ display:'grid', gap:10 }}>
+                  {mjPaidCustomers.map((c, i) => (
+                    <div key={c.hn} style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:14, padding:12 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                        <div>
+                          <p style={{ fontSize:13, fontWeight:900, color:'#0f172a', margin:0 }}>{i+1}. {c.name}</p>
+                          <p style={{ fontSize:10, color:'#64748b', fontWeight:700, margin:'2px 0 0' }}>HN: {c.hn} · {c.phone}</p>
+                        </div>
+                        <span style={{ background:'#dbeafe', color:'#1d4ed8', padding:'4px 10px', borderRadius:12, fontSize:11, fontWeight:900 }}>
+                          {c.customerStatus === 'ใหม่' ? '🆕 ใหม่' : '👤 เก่า'}
+                        </span>
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+                        <div style={{ background:'white', padding:'8px 10px', borderRadius:10, border:'1px solid #bfdbfe' }}>
+                          <span style={{ fontSize:8, fontWeight:900, color:'#3b82f6', textTransform:'uppercase' }}>ฉีด</span>
+                          <p style={{ fontSize:14, fontWeight:900, color:'#1d4ed8', margin:'2px 0 0' }}>{c.rangeMjInj} <span style={{ fontSize:9, color:'#3b82f6' }}>ครั้ง</span></p>
+                        </div>
+                        <div style={{ background:'white', padding:'8px 10px', borderRadius:10, border:'1px solid #bfdbfe' }}>
+                          <span style={{ fontSize:8, fontWeight:900, color:'#3b82f6', textTransform:'uppercase' }}>ปกติ</span>
+                          <p style={{ fontSize:13, fontWeight:900, color:'#1d4ed8', margin:'2px 0 0' }}>฿{c.rangeMjPaidNormal.toLocaleString()}</p>
+                        </div>
+                        <div style={{ background:'white', padding:'8px 10px', borderRadius:10, border:'1px solid #bbf7d0' }}>
+                          <span style={{ fontSize:8, fontWeight:900, color:'#16a34a', textTransform:'uppercase' }}>BL</span>
+                          <p style={{ fontSize:13, fontWeight:900, color:'#16a34a', margin:'2px 0 0' }}>฿{c.rangeMjPaidDebt.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <span style={{ fontSize:9, color:'#94a3b8', fontWeight:700 }}>บริการล่าสุด: {fmt(c.rangeLastDate || c.lastDate)}</span>
+                        <span style={{ fontSize:12, fontWeight:900, color:'#1d4ed8' }}>฿{c.rangeMjPaid.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign:'center', padding:'40px 20px', color:'#cbd5e1' }}>
+                  <Ic n="syringe" s={32} c="text-slate-300" style={{ marginBottom:12 }} />
+                  <p style={{ fontWeight:700, fontSize:13, margin:0 }}>ไม่พบลูกค้า Mounjaro ที่ชำระเงิน</p>
+                  <p style={{ fontSize:11, color:'#94a3b8', margin:'4px 0 0' }}>ลองเปลี่ยนช่วงเวลาหรือกรองข้อมูล</p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={doCopyMjPaid} disabled={!mjPaidCustomers.length}
+                style={{ flex:1, padding:'12px', borderRadius:12, fontWeight:900, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: mjPaidCustomers.length ? 'pointer' : 'not-allowed', border:'none', background: mjPaidCustomers.length ? '#eef2ff' : '#f1f5f9', color: mjPaidCustomers.length ? '#6366f1' : '#cbd5e1' }}>
+                <Ic n="copy" s={15} />คัดลอกข้อความ
+              </button>
+              <button onClick={doExportMjPaidXLSX} disabled={!mjPaidCustomers.length}
+                style={{ flex:1, padding:'12px', borderRadius:12, fontWeight:900, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: mjPaidCustomers.length ? 'pointer' : 'not-allowed', border:'none', background: mjPaidCustomers.length ? '#dcfce7' : '#f1f5f9', color: mjPaidCustomers.length ? '#16a34a' : '#cbd5e1' }}>
+                <Ic n="dl" s={15} />Export XLSX
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Modal */}
       {modal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }}>
@@ -1082,7 +1176,6 @@ const App = () => {
                 </div>
               ))}
               <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:8 }}>
-                {/* ✅ Mounjaro Revenue — ตรงกับ Code 1 */}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', borderRadius:14, background:'#eff6ff', border:'2px solid #3b82f6' }}>
                   <div>
                     <span style={{ fontWeight:900, fontSize:14, color:'#1e3a8a' }}>💉 ยอดขาย Mounjaro (ตรงกับ Code 1)</span>
@@ -1090,7 +1183,6 @@ const App = () => {
                   </div>
                   <span style={{ fontSize:22, fontWeight:900, color:'#1d4ed8' }}>฿{stats.mjRev.toLocaleString()}</span>
                 </div>
-                {/* ยอดชำระตอนนี้ */}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', borderRadius:14, background:'#fef9c3', border:'2px solid #fde047' }}>
                   <div>
                     <span style={{ fontWeight:900, fontSize:14, color:'#92400e' }}>💰 ยอดชำระตอนนี้ (Weight-Loss)</span>
@@ -1098,32 +1190,7 @@ const App = () => {
                   </div>
                   <span style={{ fontSize:22, fontWeight:900, color:'#b45309' }}>฿{nowPay.toLocaleString()}</span>
                 </div>
-                {[
-                  ['ยอดรับรวมทั้งคลินิก',          `฿${clinicTotalSales.toLocaleString()}`, '#f8fafc','#0f172a','#e2e8f0'],
-                  ['ยอดซื้อรวม (เป้าหมาย)',         `฿${stats.totalPurchase.toLocaleString()}`, '#fff','#475569','#f1f5f9'],
-                  ['ยอดค้างชำระ',                   `฿${stats.outstanding.toLocaleString()}`, '#fff1f2','#e11d48','#fecdd3'],
-                ].map(([l, v, bg, vc, bd]) => (
-                  <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', borderRadius:12, background:bg, border:`1px solid ${bd}` }}>
-                    <span style={{ fontWeight:700, fontSize:13 }}>{l}</span>
-                    <span style={{ fontSize:20, fontWeight:900, color:vc }}>{v}</span>
-                  </div>
-                ))}
               </div>
-              {Object.keys(stats.injBD).length > 0 && (
-                <div style={{ background:'#f8fafc', borderRadius:20, padding:16, border:'1px solid #f1f5f9', marginTop:12 }}>
-                  <p style={{ fontSize:12, fontWeight:900, color:'#0f172a', marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
-                    <Ic n="syringe" s={13} c="text-blue-600" />ฉีด Mounjaro กี่ครั้ง มีกี่คน (ในช่วงเวลา)
-                  </p>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-                    {Object.entries(stats.injBD).sort((a, b) => +a[0] - +b[0]).map(([n, c]) => (
-                      <div key={n} style={{ background:'white', padding:'8px 12px', borderRadius:12, display:'flex', justifyContent:'space-between', border:'1px solid #f1f5f9' }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:'#475569' }}>ฉีด <span style={{ color:'#2563eb', fontWeight:900 }}>{n}</span> ครั้ง</span>
-                        <span style={{ fontSize:13, fontWeight:900 }}>{c} <span style={{ fontSize:9, color:'#94a3b8' }}>คน</span></span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
               <button onClick={doCopy} style={{ width:'100%', marginTop:12, padding:'12px', borderRadius:12, fontWeight:900, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', border:'none', background: copyOk ? '#dcfce7' : '#eef2ff', color: copyOk ? '#16a34a' : '#6366f1' }}>
                 {copyOk ? <><Ic n="check" s={15} />คัดลอกสำเร็จ!</> : <><Ic n="copy" s={15} />คัดลอกข้อความ</>}
               </button>
@@ -1153,78 +1220,6 @@ const App = () => {
                 <label style={{ fontSize:11, fontWeight:900, color:'#475569', textTransform:'uppercase', letterSpacing:2, display:'block', marginBottom:8 }}>ชื่อสาขา / คลินิก</label>
                 <input type="text" placeholder="เช่น Florenza Clinic The Choc..." value={branchName} onChange={e => setBranchName(e.target.value)}
                   style={{ width:'100%', background:'#f8fafc', padding:'12px 16px', borderRadius:16, border:'1px solid #e2e8f0', fontSize:14, fontWeight:700, outline:'none' }} />
-              </div>
-              <div>
-                <label style={{ fontSize:11, fontWeight:900, color:'#475569', textTransform:'uppercase', letterSpacing:2, display:'block', marginBottom:10 }}>Preview</label>
-                <div style={{ borderRadius:16, overflow:'hidden', boxShadow:'0 4px 20px rgba(0,0,0,0.15)' }}>
-                  <div ref={imgRef} style={{ background:'linear-gradient(135deg,#1e3a5f 0%,#1d4ed8 45%,#0ea5e9 100%)', padding:24, fontFamily:'Sarabun,sans-serif' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
-                      <div>
-                        <div style={{ color:'rgba(255,255,255,0.5)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:2, marginBottom:3 }}>INJECTION + DEBT REPORT v6</div>
-                        <div style={{ color:'white', fontSize:20, fontWeight:900, lineHeight:1.2 }}>{branchName.trim() || 'ชื่อสาขา / คลินิก'}</div>
-                      </div>
-                      <div style={{ textAlign:'right' }}>
-                        <div style={{ color:'rgba(255,255,255,0.5)', fontSize:9, fontWeight:700 }}>วันที่ออกรายงาน</div>
-                        <div style={{ color:'white', fontSize:12, fontWeight:900 }}>{new Date().toLocaleDateString('th-TH',{ day:'2-digit', month:'long', year:'numeric' })}</div>
-                        {(startD || endD) && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:9, fontWeight:700, marginTop:2 }}>{startD && fmt(new Date(startD))} {startD && endD && '–'} {endD && fmt(new Date(endD))}</div>}
-                      </div>
-                    </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:9 }}>
-                      {[
-                        { l:'ยอดรับรวมทั้งคลินิก',             v:`฿${clinicTotalSales.toLocaleString()}`, bg:'rgba(245,158,11,0.25)', vc:'#fcd34d' },
-                        { l:'สัดส่วน % Mounjaro',  v:`${mjPercent}%`,                        bg:'rgba(59,130,246,0.3)',  vc:'#93c5fd' },
-                        { l:'💉 ยอดขาย Mounjaro (ปกติ+BL)',    v:`฿${stats.mjRev.toLocaleString()}`,     bg:'rgba(96,165,250,0.3)',  vc:'#bfdbfe' },
-                        { l:'💰 ยอดชำระตอนนี้ (Weight-Loss)',   v:`฿${nowPay.toLocaleString()}`,          bg:'rgba(253,224,71,0.3)', vc:'#fef08a'  },
-                        { l:'ชำระหน้าร้านครั้งแรก',                    v:`฿${stats.firstPay.toLocaleString()}`,  bg:'rgba(16,185,129,0.25)',vc:'#6ee7b7' },
-                        { l:'ยอดชำระ BL มาแล้ว',                         v:`฿${stats.blPay.toLocaleString()}`,     bg:'rgba(167,139,250,0.25)',vc:'#ddd6fe' },
-                        { l:'ยอดค้างชำระ BL',                        v:`฿${stats.outstanding.toLocaleString()}`,bg:'rgba(244,63,94,0.28)', vc:'#fda4af' },
-                      ].map(({ l, v, bg, vc }) => (
-                        <div key={l} style={{ background:bg, borderRadius:12, padding:'10px 13px' }}>
-                          <div style={{ color:'rgba(255,255,255,0.65)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>{l}</div>
-                          <div style={{ color:vc, fontSize:15, fontWeight:900 }}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:9 }}>
-                      {[['ลูกค้าทั้งหมด',filtered.length],['Mounjaro',stats.mjC],['PEPTIDE',stats.pepC],['ปากกาลดน้ำหนัก',stats.pakaC],['ลูกค้าใหม่',stats.newC],['ลูกค้าเก่า',stats.oldC]].map(([l,v])=>(
-                        <div key={l} style={{ background:'rgba(255,255,255,0.1)', borderRadius:10, padding:'8px 11px' }}>
-                          <div style={{ color:'rgba(255,255,255,0.5)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>{l}</div>
-                          <div style={{ color:'white', fontSize:18, fontWeight:900, marginTop:1 }}>{v} <span style={{ fontSize:8, opacity:0.6 }}>คน</span></div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:12, padding:'11px 14px', marginBottom:9 }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                        <span style={{ color:'rgba(255,255,255,0.65)', fontSize:9, fontWeight:900, textTransform:'uppercase', letterSpacing:1 }}>💉 Mounjaro Revenue (ตรงกับ Code 1)</span>
-                        <span style={{ color:'#93c5fd', fontSize:9, fontWeight:700 }}>฿{stats.mjRev.toLocaleString()} ({mjPercent}%)</span>
-                      </div>
-                      <div style={{ color:'white', fontSize:12, fontWeight:800 }}>
-                        ฉีดทั้งหมด <span style={{ fontSize:22, color:'#60a5fa', fontWeight:900 }}>{stats.mjInj}</span> ครั้ง
-                        <span style={{ color:'rgba(255,255,255,0.5)', fontSize:10, marginLeft:8 }}>· ที่ฉีดจริง {stats.injC} คน · มีหนี้ {stats.debtC} คน</span>
-                      </div>
-                      <div style={{ display:'flex', gap:8, marginTop:6 }}>
-                        <span style={{ fontSize:9, background:'rgba(59,130,246,0.4)', color:'#bfdbfe', padding:'2px 8px', borderRadius:8, fontWeight:900 }}>ปกติ ฿{stats.mjRevNormal.toLocaleString()}</span>
-                        <span style={{ fontSize:9, background:'rgba(34,197,94,0.4)', color:'#bbf7d0', padding:'2px 8px', borderRadius:8, fontWeight:900 }}>BL ฿{stats.mjRevDebt.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    {Object.keys(stats.injBD).length > 0 && (
-                      <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:10, padding:'9px 13px', marginBottom:9 }}>
-                        <div style={{ color:'rgba(255,255,255,0.4)', fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:5 }}>จำนวนครั้งที่ฉีด Mounjaro</div>
-                        <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
-                          {Object.entries(stats.injBD).sort((a,b)=>+a[0]-+b[0]).map(([n,c])=>(
-                            <div key={n} style={{ background:'rgba(96,165,250,0.25)', borderRadius:7, padding:'3px 9px', color:'white', fontSize:11, fontWeight:900 }}>
-                              {n} ครั้ง <span style={{ color:'#93c5fd' }}>→ {c} คน</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div style={{ marginTop:12, borderTop:'1px solid rgba(255,255,255,0.12)', paddingTop:9, display:'flex', justifyContent:'space-between' }}>
-                      <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>INJECTION HISTORY + DEBT · v6 FIXED</div>
-                      <div style={{ color:'rgba(255,255,255,0.25)', fontSize:8, fontWeight:700 }}>ข้อมูล {filtered.length} HN · คำนวณตาม transaction date</div>
-                    </div>
-                  </div>
-                </div>
               </div>
               <button onClick={doExportImage} disabled={exporting || !ready}
                 style={{ width:'100%', padding:'14px', borderRadius:16, fontSize:14, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: exporting ? 'not-allowed' : 'pointer', border:'none', background: exporting ? '#e2e8f0' : '#7c3aed', color: exporting ? '#94a3b8' : 'white', boxShadow: exporting ? 'none' : '0 4px 15px rgba(124,58,237,0.35)' }}>
