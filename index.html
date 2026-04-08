@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title> Mounjaro Dashboard </title>
+<title>Mounjaro Dashboard v7 (เพิ่มลูกค้า Mounjaro ที่ชำระ)</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -885,7 +885,23 @@ const App = () => {
         )}
 
         {/* ── Stats Cards ── */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:14, marginBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:14, marginBottom:16 }}>
+
+          {/* ✅ NEW: Mounjaro Paid Customers Card */}
+          <div style={{ background:'white', padding:18, borderRadius:28, border:'1px solid #06b6d4', boxShadow:'0 2px 12px rgba(6,182,212,0.15)', display:'flex', alignItems:'center', gap:14, borderTop:'3px solid #06b6d4' }}>
+            <div style={{ padding:10, background:'#cffafe', borderRadius:14, color:'#0891b2', flexShrink:0 }}>
+              <Ic n="syringe" s={24} />
+            </div>
+            <div style={{ minWidth:0 }}>
+              <span style={{ fontSize:8, fontWeight:900, textTransform:'uppercase', letterSpacing:1.5, color:'#0891b2', display:'block', lineHeight:1.4 }}>Mounjaro ที่ชำระ</span>
+              <h3 style={{ fontSize:17, fontWeight:900, color:'#0e7490', margin:'2px 0 1px', lineHeight:1 }}>{mjPaidCustomers.length} <span style={{ fontSize:10, color:'#0891b2' }}>คน</span></h3>
+              <p style={{ fontSize:9, color:'#0891b2', fontWeight:700, margin:0 }}>ยอด ฿{mjPaidCustomers.reduce((sum, c) => sum + c.rangeMjPaid, 0).toLocaleString()}</p>
+              <div style={{ display:'flex', gap:4, marginTop:4, flexWrap:'wrap' }}>
+                <span style={{ fontSize:8, background:'#cffafe', color:'#0891b2', padding:'1px 6px', borderRadius:20, fontWeight:900, border:'1px solid #a5f3fc' }}>ปกติ ฿{mjPaidCustomers.reduce((sum, c) => sum + c.rangeMjPaidNormal, 0).toLocaleString()}</span>
+                <span style={{ fontSize:8, background:'#f0fdf4', color:'#16a34a', padding:'1px 6px', borderRadius:20, fontWeight:900, border:'1px solid #bbf7d0' }}>BL ฿{mjPaidCustomers.reduce((sum, c) => sum + c.rangeMjPaidDebt, 0).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
 
           {/* Mounjaro Revenue Card */}
           <div style={{ background:'white', padding:18, borderRadius:28, border:'1px solid #bfdbfe', boxShadow:'0 2px 12px rgba(59,130,246,0.15)', display:'flex', alignItems:'center', gap:14, borderTop:'3px solid #3b82f6' }}>
