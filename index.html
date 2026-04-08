@@ -780,7 +780,7 @@ const App = () => {
     t += `-----------------------------\n`;
     t += `ยอดชำระตอนนี้ (weight-loss ปกติ+BL): ฿${nowPay.toLocaleString()}\n`;
     t += `ยอดซื้อรวม (เป้าหมาย): ฿${stats.totalPurchase.toLocaleString()}\n`;
-    t += `ยอดชำระหน้าร้าน: ฿${stats.firstPay.toLocaleString()}\n`;
+    t += `ยอดชำระหน้าร้านไม่รวม BL: ฿${stats.firstPay.toLocaleString()}\n`;
     t += `ยอดชำระ BL: ฿${stats.blPay.toLocaleString()}\n`;
     t += `ยอดค้างชำระ: ฿${stats.outstanding.toLocaleString()}\n`;
     t += `ลูกค้ามีหนี้: ${stats.debtC} คน\n-----------------------------\n`;
